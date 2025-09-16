@@ -1132,7 +1132,7 @@ function createUI()
         addItem()
     end)
 
-    frame.Visible = false
+    frame.Visible = true
 end
 
 -- Show items for selected category
