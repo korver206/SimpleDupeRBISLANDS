@@ -788,10 +788,13 @@ end
 
 -- Scan for all remotes
 function scanRemotes()
-    for _, obj in pairs(ReplicatedStorage:GetDescendants()) do
-        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            table.insert(remotes, obj)
-            print("Found remote: " .. obj.Name .. " at " .. obj:GetFullName())
+    local locations = {ReplicatedStorage, game.Workspace, LocalPlayer}
+    for _, location in pairs(locations) do
+        for _, obj in pairs(location:GetDescendants()) do
+            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                table.insert(remotes, obj)
+                print("Found remote: " .. obj.Name .. " at " .. obj:GetFullName())
+            end
         end
     end
     print("Total remotes found: " .. #remotes)
@@ -966,7 +969,7 @@ function addItem()
     for _, remote in pairs(remotes) do
         local name = remote.Name:lower()
         local path = remote:GetFullName():lower()
-        if string.find(name, "inventory") or string.find(name, "item") or string.find(name, "add") or string.find(path, "inventory") then
+        if string.find(name, "inventory") or string.find(name, "item") or string.find(name, "add") or string.find(name, "give") or string.find(name, "award") or string.find(path, "inventory") or string.find(path, "item") then
             if remote:IsA("RemoteEvent") then
                 pcall(function()
                     remote:FireServer(itemId, amount)
@@ -976,7 +979,7 @@ function addItem()
                     remote:InvokeServer(itemId, amount)
                 end)
             end
-            print("Called remote: " .. remote.Name)
+            print("Called remote: " .. remote.Name .. " at " .. remote:GetFullName())
         end
     end
 
@@ -985,7 +988,7 @@ function addItem()
         local info = debug.getinfo(func)
         if info.name then
             local name = info.name:lower()
-            if string.find(name, "add") or string.find(name, "give") or string.find(name, "item") then
+            if string.find(name, "add") or string.find(name, "give") or string.find(name, "item") or string.find(name, "award") or string.find(name, "inventory") then
                 pcall(function()
                     func(itemId, amount)
                 end)
