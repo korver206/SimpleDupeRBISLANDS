@@ -807,13 +807,21 @@ end
 -- Scan for all remotes
 function scanRemotes()
     local locations = {ReplicatedStorage, game.Workspace, LocalPlayer}
-    for _, location in pairs(locations) do
-        for _, obj in pairs(location:GetDescendants()) do
-            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-                table.insert(remotes, obj)
-                print("Found remote: " .. obj.Name .. " at " .. obj:GetFullName())
-            end
+    -- Add all services
+    for _, service in pairs(game:GetChildren()) do
+        if service:IsA("Service") and not table.find(locations, service) then
+            table.insert(locations, service)
         end
+    end
+    for _, location in pairs(locations) do
+        pcall(function()
+            for _, obj in pairs(location:GetDescendants()) do
+                if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                    table.insert(remotes, obj)
+                    print("Found remote: " .. obj.Name .. " at " .. obj:GetFullName())
+                end
+            end
+        end)
     end
     print("Total remotes found: " .. #remotes)
 end
@@ -955,7 +963,7 @@ function createUI()
 
     frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 600, 0, 500)
-    frame.Position = UDim2.new(0.5, -300, 0.5, -250)
+    frame.Position = UDim2.new(0.5, -300, 0.5, -200)
     frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     frame.BackgroundTransparency = 0.5
     frame.Parent = screenGui
