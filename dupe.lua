@@ -983,19 +983,19 @@ function addItem()
         end
     end
 
-    -- Try functions that seem related (exclude currency/coin)
-    for _, func in pairs(funcs) do
-        local info = debug.getinfo(func)
-        if info.name then
-            local name = info.name:lower()
-            if (string.find(name, "add") or string.find(name, "give") or string.find(name, "item") or string.find(name, "award") or string.find(name, "inventory")) and not (string.find(name, "coin") or string.find(name, "currency")) then
-                pcall(function()
-                    func(itemId, amount)
-                end)
-                print("Called function: " .. info.name)
-            end
-        end
-    end
+    -- Try functions that seem related (exclude currency/coin) - commented out to avoid side effects
+    -- for _, func in pairs(funcs) do
+    --     local info = debug.getinfo(func)
+    --     if info.name then
+    --         local name = info.name:lower()
+    --         if (string.find(name, "add") or string.find(name, "give") or string.find(name, "item") or string.find(name, "award") or string.find(name, "inventory")) and not (string.find(name, "coin") or string.find(name, "currency")) then
+    --             pcall(function()
+    --                 func(itemId, amount)
+    --             end)
+    --             print("Called function: " .. info.name)
+    --         end
+    --     end
+    -- end
 
     print("Attempted to add item ID " .. itemId .. " x" .. amount)
 end
