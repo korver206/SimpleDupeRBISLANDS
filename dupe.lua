@@ -24,9 +24,10 @@ function scanRemotes()
     for _, obj in pairs(ReplicatedStorage:GetDescendants()) do
         if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
             table.insert(remotes, obj)
+            print("Found remote: " .. obj.Name .. " at " .. obj:GetFullName())
         end
     end
-    print("Found " .. #remotes .. " remotes")
+    print("Total remotes found: " .. #remotes)
 end
 
 -- Scan for all functions
@@ -36,10 +37,11 @@ function scanFunctions()
             local info = debug.getinfo(func)
             if info.name then
                 table.insert(funcs, func)
+                print("Found function: " .. info.name)
             end
         end
     end
-    print("Found " .. #funcs .. " functions")
+    print("Total functions found: " .. #funcs)
 end
 
 -- Create simple UI on bottom left
@@ -120,24 +122,36 @@ function addItem()
         return
     end
 
-    -- Try remotes first
+    -- Try remotes that seem related to inventory/items
     for _, remote in pairs(remotes) do
-        if remote:IsA("RemoteEvent") then
-            pcall(function()
-                remote:FireServer(itemId, amount)
-            end)
-        elseif remote:IsA("RemoteFunction") then
-            pcall(function()
-                remote:InvokeServer(itemId, amount)
-            end)
+        local name = remote.Name:lower()
+        local path = remote:GetFullName():lower()
+        if string.find(name, "inventory") or string.find(name, "item") or string.find(name, "add") or string.find(path, "inventory") then
+            if remote:IsA("RemoteEvent") then
+                pcall(function()
+                    remote:FireServer(itemId, amount)
+                end)
+            elseif remote:IsA("RemoteFunction") then
+                pcall(function()
+                    remote:InvokeServer(itemId, amount)
+                end)
+            end
+            print("Called remote: " .. remote.Name)
         end
     end
 
-    -- Try functions
+    -- Try functions that seem related
     for _, func in pairs(funcs) do
-        pcall(function()
-            func(itemId, amount)
-        end)
+        local info = debug.getinfo(func)
+        if info.name then
+            local name = info.name:lower()
+            if string.find(name, "add") or string.find(name, "give") or string.find(name, "item") then
+                pcall(function()
+                    func(itemId, amount)
+                end)
+                print("Called function: " .. info.name)
+            end
+        end
     end
 
     print("Attempted to add item ID " .. itemId .. " x" .. amount)
