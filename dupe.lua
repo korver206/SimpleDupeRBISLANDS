@@ -23,6 +23,23 @@ local itemFrame
 local currentCategory = nil
 local items = {}
 
+-- Console capture
+local originalPrint = print
+local consoleText = ""
+print = function(...)
+    local args = {...}
+    local str = ""
+    for i, v in pairs(args) do
+        str = str .. tostring(v) .. (i < #args and " " or "")
+    end
+    consoleText = consoleText .. str .. "\n"
+    originalPrint(...)
+end
+
+-- Console UI
+local consoleGui
+local consoleVisible = false
+
 -- Parse item data
 local itemData = [[
 2	Aquamarine Sword	COMBAT
@@ -814,6 +831,81 @@ function scanFunctions()
     print("Total functions found: " .. #funcs)
 end
 
+-- Create console UI
+function createConsoleUI()
+    consoleGui = Instance.new("ScreenGui")
+    consoleGui.Enabled = true
+    consoleGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+    local consoleFrame = Instance.new("Frame")
+    consoleFrame.Size = UDim2.new(0, 600, 0, 400)
+    consoleFrame.Position = UDim2.new(0.5, -300, 0.5, -200)
+    consoleFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    consoleFrame.BackgroundTransparency = 0.2
+    consoleFrame.Parent = consoleGui
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 30)
+    title.Position = UDim2.new(0, 0, 0, 0)
+    title.Text = "Console Output"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.BackgroundTransparency = 1
+    title.Parent = consoleFrame
+
+    local scrollFrame = Instance.new("ScrollingFrame")
+    scrollFrame.Size = UDim2.new(1, -20, 1, -80)
+    scrollFrame.Position = UDim2.new(0, 10, 0, 35)
+    scrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    scrollFrame.BackgroundTransparency = 0.5
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scrollFrame.Parent = consoleFrame
+
+    local consoleLabel = Instance.new("TextLabel")
+    consoleLabel.Size = UDim2.new(1, 0, 0, 0)
+    consoleLabel.Position = UDim2.new(0, 0, 0, 0)
+    consoleLabel.Text = consoleText
+    consoleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    consoleLabel.BackgroundTransparency = 1
+    consoleLabel.TextWrapped = true
+    consoleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    consoleLabel.TextYAlignment = Enum.TextYAlignment.Top
+    consoleLabel.Parent = scrollFrame
+
+    -- Auto-resize
+    consoleLabel.Size = UDim2.new(1, 0, 0, consoleLabel.TextBounds.Y)
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, consoleLabel.TextBounds.Y)
+
+    local copyButton = Instance.new("TextButton")
+    copyButton.Size = UDim2.new(0, 100, 0, 30)
+    copyButton.Position = UDim2.new(0, 10, 1, -35)
+    copyButton.Text = "Copy to Clipboard"
+    copyButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+    copyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    copyButton.Parent = consoleFrame
+
+    copyButton.MouseButton1Click:Connect(function()
+        if setclipboard then
+            setclipboard(consoleText)
+            print("Console text copied to clipboard")
+        else
+            print("setclipboard not available")
+        end
+    end)
+
+    local closeButton = Instance.new("TextButton")
+    closeButton.Size = UDim2.new(0, 100, 0, 30)
+    closeButton.Position = UDim2.new(1, -110, 1, -35)
+    closeButton.Text = "Close"
+    closeButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+    closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeButton.Parent = consoleFrame
+
+    closeButton.MouseButton1Click:Connect(function()
+        consoleVisible = false
+        consoleGui.Enabled = false
+    end)
+end
+
 -- Scan inventory
 function scanInventory(type)
     local items = {}
@@ -826,28 +918,33 @@ function scanInventory(type)
             end
         end
     elseif type == "Hotbar" then
-        -- Assuming hotbar is in PlayerGui or somewhere
-        local hotbar = LocalPlayer.PlayerGui:FindFirstChild("Hotbar")
-        if hotbar then
-            for _, slot in pairs(hotbar:GetChildren()) do
-                if slot:IsA("Frame") and slot:FindFirstChild("Item") then
-                    local item = slot.Item
-                    local name = item.Name
-                    local amount = item:FindFirstChild("Amount") and item.Amount.Value or 1
-                    table.insert(items, name .. " x" .. amount)
+        -- Try to find hotbar in PlayerGui
+        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+        if playerGui then
+            for _, gui in pairs(playerGui:GetChildren()) do
+                if gui.Name:lower():find("hotbar") or gui.Name:lower():find("inventory") then
+                    for _, slot in pairs(gui:GetDescendants()) do
+                        if slot:IsA("Frame") and slot:FindFirstChild("Item") then
+                            local item = slot.Item
+                            local name = item.Name
+                            local amount = item:FindFirstChild("Amount") and item.Amount.Value or 1
+                            table.insert(items, name .. " x" .. amount)
+                        elseif slot:IsA("Tool") then
+                            table.insert(items, slot.Name .. " x1")
+                        end
+                    end
                 end
             end
-        else
-            invDisplay.Text = "Hotbar not found"
-            return
+        end
+        if #items == 0 then
+            table.insert(items, "Hotbar not found or empty")
         end
     end
 
-    if #items > 0 then
-        invDisplay.Text = type .. ":\n" .. table.concat(items, "\n")
-    else
-        invDisplay.Text = type .. ": Empty"
-    end
+    local text = type .. ":\n" .. table.concat(items, "\n")
+    invDisplay.Text = text
+    invDisplay.Size = UDim2.new(1, 0, 0, invDisplay.TextBounds.Y)
+    invScroll.CanvasSize = UDim2.new(0, 0, 0, invDisplay.TextBounds.Y)
 end
 
 -- Create UI with item browser
@@ -911,8 +1008,8 @@ function createUI()
 
     -- Inventory display section
     local inventoryFrame = Instance.new("Frame")
-    inventoryFrame.Size = UDim2.new(1, -160, 0, 100)
-    inventoryFrame.Position = UDim2.new(0, 160, 0, 250)
+    inventoryFrame.Size = UDim2.new(1, -160, 0, 120)
+    inventoryFrame.Position = UDim2.new(0, 160, 0, 350)
     inventoryFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
     inventoryFrame.BackgroundTransparency = 0.3
     inventoryFrame.Parent = frame
@@ -949,14 +1046,24 @@ function createUI()
     refreshInvButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     refreshInvButton.Parent = inventoryFrame
 
-    local invDisplay = Instance.new("TextLabel")
-    invDisplay.Size = UDim2.new(1, -10, 0, 40)
-    invDisplay.Position = UDim2.new(0, 5, 0, 55)
+    local invScroll = Instance.new("ScrollingFrame")
+    invScroll.Size = UDim2.new(1, -10, 0, 60)
+    invScroll.Position = UDim2.new(0, 5, 0, 55)
+    invScroll.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    invScroll.BackgroundTransparency = 0.5
+    invScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    invScroll.Parent = inventoryFrame
+
+    invDisplay = Instance.new("TextLabel")
+    invDisplay.Size = UDim2.new(1, 0, 0, 0)
+    invDisplay.Position = UDim2.new(0, 0, 0, 0)
     invDisplay.Text = "Click to scan inventory"
     invDisplay.TextColor3 = Color3.fromRGB(255, 255, 255)
     invDisplay.BackgroundTransparency = 1
     invDisplay.TextWrapped = true
-    invDisplay.Parent = inventoryFrame
+    invDisplay.TextXAlignment = Enum.TextXAlignment.Left
+    invDisplay.TextYAlignment = Enum.TextYAlignment.Top
+    invDisplay.Parent = invScroll
 
     backpackDropdown.MouseButton1Click:Connect(function()
         scanInventory("Backpack")
@@ -1113,6 +1220,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         else
             uiVisible = not uiVisible
             frame.Visible = uiVisible
+        end
+    elseif input.KeyCode == Enum.KeyCode.K then
+        consoleVisible = not consoleVisible
+        if consoleGui then
+            consoleGui.Enabled = consoleVisible
+        else
+            createConsoleUI()
         end
     end
 end)
