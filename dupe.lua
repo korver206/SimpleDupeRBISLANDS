@@ -965,11 +965,11 @@ function addItem()
         return
     end
 
-    -- Try remotes that seem related to inventory/items
+    -- Try remotes that seem related to inventory/items (exclude currency/coin)
     for _, remote in pairs(remotes) do
         local name = remote.Name:lower()
         local path = remote:GetFullName():lower()
-        if string.find(name, "inventory") or string.find(name, "item") or string.find(name, "add") or string.find(name, "give") or string.find(name, "award") or string.find(path, "inventory") or string.find(path, "item") then
+        if (string.find(name, "inventory") or string.find(name, "item") or string.find(name, "add") or string.find(name, "give") or string.find(name, "award") or string.find(path, "inventory") or string.find(path, "item")) and not (string.find(name, "coin") or string.find(name, "currency") or string.find(path, "coin") or string.find(path, "currency")) then
             if remote:IsA("RemoteEvent") then
                 pcall(function()
                     remote:FireServer(itemId, amount)
@@ -983,12 +983,12 @@ function addItem()
         end
     end
 
-    -- Try functions that seem related
+    -- Try functions that seem related (exclude currency/coin)
     for _, func in pairs(funcs) do
         local info = debug.getinfo(func)
         if info.name then
             local name = info.name:lower()
-            if string.find(name, "add") or string.find(name, "give") or string.find(name, "item") or string.find(name, "award") or string.find(name, "inventory") then
+            if (string.find(name, "add") or string.find(name, "give") or string.find(name, "item") or string.find(name, "award") or string.find(name, "inventory")) and not (string.find(name, "coin") or string.find(name, "currency")) then
                 pcall(function()
                     func(itemId, amount)
                 end)
