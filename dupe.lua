@@ -814,14 +814,50 @@ function scanFunctions()
     print("Total functions found: " .. #funcs)
 end
 
+-- Scan inventory
+function scanInventory(type)
+    local items = {}
+    if type == "Backpack" then
+        for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
+            if item:IsA("Tool") then
+                local name = item.Name
+                local amount = 1 -- Assume 1 for tools
+                table.insert(items, name .. " x" .. amount)
+            end
+        end
+    elseif type == "Hotbar" then
+        -- Assuming hotbar is in PlayerGui or somewhere
+        local hotbar = LocalPlayer.PlayerGui:FindFirstChild("Hotbar")
+        if hotbar then
+            for _, slot in pairs(hotbar:GetChildren()) do
+                if slot:IsA("Frame") and slot:FindFirstChild("Item") then
+                    local item = slot.Item
+                    local name = item.Name
+                    local amount = item:FindFirstChild("Amount") and item.Amount.Value or 1
+                    table.insert(items, name .. " x" .. amount)
+                end
+            end
+        else
+            invDisplay.Text = "Hotbar not found"
+            return
+        end
+    end
+
+    if #items > 0 then
+        invDisplay.Text = type .. ":\n" .. table.concat(items, "\n")
+    else
+        invDisplay.Text = type .. ": Empty"
+    end
+end
+
 -- Create UI with item browser
 function createUI()
     screenGui = Instance.new("ScreenGui")
     screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
     frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 600, 0, 400)
-    frame.Position = UDim2.new(0.5, -300, 0.5, -200)
+    frame.Size = UDim2.new(0, 600, 0, 500)
+    frame.Position = UDim2.new(0.5, -300, 0.5, -250)
     frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     frame.BackgroundTransparency = 0.5
     frame.Parent = screenGui
@@ -872,6 +908,68 @@ function createUI()
     itemFrame.BackgroundTransparency = 0.3
     itemFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     itemFrame.Parent = frame
+
+    -- Inventory display section
+    local inventoryFrame = Instance.new("Frame")
+    inventoryFrame.Size = UDim2.new(1, -160, 0, 100)
+    inventoryFrame.Position = UDim2.new(0, 160, 0, 250)
+    inventoryFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    inventoryFrame.BackgroundTransparency = 0.3
+    inventoryFrame.Parent = frame
+
+    local invLabel = Instance.new("TextLabel")
+    invLabel.Size = UDim2.new(1, 0, 0, 20)
+    invLabel.Position = UDim2.new(0, 0, 0, 0)
+    invLabel.Text = "Inventory Scanner"
+    invLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    invLabel.BackgroundTransparency = 1
+    invLabel.Parent = inventoryFrame
+
+    local backpackDropdown = Instance.new("TextButton")
+    backpackDropdown.Size = UDim2.new(0.3, -10, 0, 25)
+    backpackDropdown.Position = UDim2.new(0, 5, 0, 25)
+    backpackDropdown.Text = "Scan Backpack"
+    backpackDropdown.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    backpackDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
+    backpackDropdown.Parent = inventoryFrame
+
+    local hotbarDropdown = Instance.new("TextButton")
+    hotbarDropdown.Size = UDim2.new(0.3, -10, 0, 25)
+    hotbarDropdown.Position = UDim2.new(0.35, 5, 0, 25)
+    hotbarDropdown.Text = "Scan Hotbar"
+    hotbarDropdown.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    hotbarDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
+    hotbarDropdown.Parent = inventoryFrame
+
+    local refreshInvButton = Instance.new("TextButton")
+    refreshInvButton.Size = UDim2.new(0.3, -10, 0, 25)
+    refreshInvButton.Position = UDim2.new(0.7, 5, 0, 25)
+    refreshInvButton.Text = "Refresh"
+    refreshInvButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    refreshInvButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    refreshInvButton.Parent = inventoryFrame
+
+    local invDisplay = Instance.new("TextLabel")
+    invDisplay.Size = UDim2.new(1, -10, 0, 40)
+    invDisplay.Position = UDim2.new(0, 5, 0, 55)
+    invDisplay.Text = "Click to scan inventory"
+    invDisplay.TextColor3 = Color3.fromRGB(255, 255, 255)
+    invDisplay.BackgroundTransparency = 1
+    invDisplay.TextWrapped = true
+    invDisplay.Parent = inventoryFrame
+
+    backpackDropdown.MouseButton1Click:Connect(function()
+        scanInventory("Backpack")
+    end)
+
+    hotbarDropdown.MouseButton1Click:Connect(function()
+        scanInventory("Hotbar")
+    end)
+
+    refreshInvButton.MouseButton1Click:Connect(function()
+        scanInventory("Backpack")
+        scanInventory("Hotbar")
+    end)
 
     -- Bottom controls
     local bottomFrame = Instance.new("Frame")
