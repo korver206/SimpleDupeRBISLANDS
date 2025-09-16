@@ -39,6 +39,7 @@ end
 -- Console UI
 local consoleGui
 local consoleVisible = false
+local consoleLabel
 
 -- Parse item data
 local itemData = [[
@@ -860,7 +861,7 @@ function createConsoleUI()
     scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     scrollFrame.Parent = consoleFrame
 
-    local consoleLabel = Instance.new("TextLabel")
+    consoleLabel = Instance.new("TextLabel")
     consoleLabel.Size = UDim2.new(1, 0, 0, 0)
     consoleLabel.Position = UDim2.new(0, 0, 0, 0)
     consoleLabel.Text = consoleText
@@ -1237,6 +1238,13 @@ scanFunctions()
 createUI()
 
 while not exitScript do
+    if consoleLabel then
+        consoleLabel.Text = consoleText
+        consoleLabel.Size = UDim2.new(1, 0, 0, consoleLabel.TextBounds.Y)
+        if consoleLabel.Parent then
+            consoleLabel.Parent.CanvasSize = UDim2.new(0, 0, 0, consoleLabel.TextBounds.Y)
+        end
+    end
     task.wait(0.1)
 end
 
