@@ -19,32 +19,27 @@ local idTextBox
 local amountTextBox
 local addButton
 
--- Scan for remotes related to items/inventory
+-- Scan for all remotes
 function scanRemotes()
     for _, obj in pairs(ReplicatedStorage:GetDescendants()) do
         if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            if string.find(obj.Name:lower(), "item") or string.find(obj.Name:lower(), "inventory") or string.find(obj.Name:lower(), "add") then
-                table.insert(remotes, obj)
-            end
+            table.insert(remotes, obj)
         end
     end
-    print("Found " .. #remotes .. " potential remotes")
+    print("Found " .. #remotes .. " remotes")
 end
 
--- Scan for functions related to adding items
+-- Scan for all functions
 function scanFunctions()
     for _, func in pairs(getgc()) do
         if type(func) == "function" then
             local info = debug.getinfo(func)
             if info.name then
-                local name = info.name:lower()
-                if string.find(name, "add") and (string.find(name, "item") or string.find(name, "inventory")) then
-                    table.insert(funcs, func)
-                end
+                table.insert(funcs, func)
             end
         end
     end
-    print("Found " .. #funcs .. " potential functions")
+    print("Found " .. #funcs .. " functions")
 end
 
 -- Create simple UI on bottom left
