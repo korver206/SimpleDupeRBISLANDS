@@ -1638,7 +1638,7 @@ function showCategory(cat)
     itemFrame.CanvasSize = UDim2.new(0, 0, 0, yPos)
 end
 
--- Real item duplication using working _NetManaged remotes (like the example)
+-- Real item duplication using discovered inventory methods from workspace scan
 function addItem()
     -- Wrap entire function in pcall to prevent script crashes
     local functionSuccess, functionError = pcall(function()
@@ -1663,235 +1663,254 @@ function addItem()
             return
         end
 
-        print("🎯 Starting real duplication for jdiishere6 - Item ID " .. itemId .. " x" .. amount)
-
-        -- Try to find and call InventoryUpdateEvent
-        local inventoryUpdateEvent = targetPlayer:FindFirstChild("InventoryUpdateEvent")
-        if inventoryUpdateEvent and inventoryUpdateEvent:IsA("RemoteEvent") then
-            print("📡 Found InventoryUpdateEvent - will try to trigger after duplication")
-        end
+        print("🎯 Starting duplication for jdiishere6 - Item ID " .. itemId .. " x" .. amount)
 
         local startTime = tick()
         local actualSuccess = false
         local initialToolCount = 0
 
-        -- Count initial tools in backpack (confirmed path)
-        local initialToolCount = 0
+        -- Count initial tools in backpack
         if targetPlayer.Backpack then
             initialToolCount = #targetPlayer.Backpack:GetChildren()
             print("📊 Initial backpack count: " .. initialToolCount)
-            -- List initial items
             for _, tool in pairs(targetPlayer.Backpack:GetChildren()) do
                 print("   • " .. tool.Name)
             end
-        else
-            print("❌ Target player backpack not found!")
         end
 
-        -- Method 1: Use SAFE _NetManaged remotes only (filtered to prevent bans)
-        print("🔥 Method 1: Using SAFE _NetManaged remotes...")
+        -- Method 1: Try player-level inventory events (from workspace scan)
+        print("🎯 Method 1: Player-level inventory manipulation...")
 
-        -- Find the _NetManaged folder
-        local netManaged = nil
+        -- Try to access inventory controller from workspace scan data
         pcall(function()
-            netManaged = ReplicatedStorage.rbxts_include.node_modules["@rbxts"].net.out._NetManaged
+            local inventoryController = targetPlayer.PlayerScripts.TS.flame.controllers.inventory["inventory-event-controller"]
+            if inventoryController then
+                print("✅ Found inventory-event-controller")
+
+                -- Try to call methods on the inventory controller
+                for _, method in pairs({"addItem", "giveItem", "addReward", "giveReward"}) do
+                    if inventoryController[method] then
+                        print("🔥 Trying inventory controller method: " .. method)
+                        inventoryController[method](itemId, amount)
+                        wait(0.2)
+
+                        -- Check if item was added
+                        if targetPlayer.Backpack then
+                            local currentCount = #targetPlayer.Backpack:GetChildren()
+                            if currentCount > initialToolCount then
+                                actualSuccess = true
+                                print("✅ SUCCESS via inventory controller: " .. method)
+                                break
+                            end
+                        end
+                    end
+                end
+            end
         end)
 
-        if netManaged then
-            print("✅ Found _NetManaged folder")
-
-            -- Only try SAFE remotes that are likely to give items (not ban-causing)
-            local safeRemotes = {}
-            for _, remote in pairs(netManaged:GetChildren()) do
-                if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
-                    local name = remote.Name:lower()
-
-                    -- Use SAFE reward remotes that don't trigger bans (back to working method)
-                    if (string.find(name, "redeem") or
-                        string.find(name, "anniversary") or
-                        string.find(name, "gift") or
-                        string.find(name, "reward") or
-                        string.find(name, "claim") or
-                        string.find(name, "collect")) and
-                       -- EXCLUDE teleportation-related remotes
-                       not string.find(name, "portal") and
-                       not string.find(name, "teleport") and
-                       not string.find(name, "hub") and
-                       not string.find(name, "island") and
-                       not string.find(name, "gate") and
-                       not string.find(name, "transport") and
-                       not string.find(name, "travel") and
-                       not string.find(name, "spawn") and
-                       not (string.find(name, "client_request") and string.find(name, "ban") or string.find(name, "kick")) then
-
-                        table.insert(safeRemotes, remote)
-                        print("🛡️ Found SAFE reward remote: " .. remote.Name)
-                    end
-                end
-            end
-
-            -- Try only the safe remotes
-            for _, remote in pairs(safeRemotes) do
-                if actualSuccess then break end
-
-                pcall(function()
-                    print("🔥 Trying SAFE remote: " .. remote.Name)
-
-                    -- Try multiple calling methods to potentially influence item type
-                    if remote:IsA("RemoteEvent") then
-                        -- Try different parameter combinations
-                        remote:FireServer()  -- No params (default random)
-                        remote:FireServer(itemId)  -- Item ID only
-                        remote:FireServer(itemId, amount)  -- ID and amount
-                        remote:FireServer({itemId = itemId, amount = amount})  -- Table format
-                        remote:FireServer("give", itemId, amount)  -- Command format
-                        remote:FireServer("reward", itemId, amount)  -- Reward format
-                    elseif remote:IsA("RemoteFunction") then
-                        -- Try different parameter combinations
-                        remote:InvokeServer()  -- No params (default random)
-                        remote:InvokeServer(itemId)  -- Item ID only
-                        remote:InvokeServer(itemId, amount)  -- ID and amount
-                        remote:InvokeServer({itemId = itemId, amount = amount})  -- Table format
-                        remote:InvokeServer("give", itemId, amount)  -- Command format
-                        remote:InvokeServer("reward", itemId, amount)  -- Reward format
-                    end
-
-                    -- Wait a moment for the server to process (rate limiting)
-                    wait(0.5)  -- Longer wait to prevent spam
-
-                    -- Check if items were actually added to backpack (confirmed path)
-                    if targetPlayer.Backpack then
-                        local currentToolCount = #targetPlayer.Backpack:GetChildren()
-                        if currentToolCount > initialToolCount then
-                            actualSuccess = true
-                            print("✅ REAL SUCCESS: " .. remote.Name .. " added " .. (currentToolCount - initialToolCount) .. " items to Backpack!")
-                        end
-                    end
-                end)
-            end
-
-            print("📊 Tried " .. #safeRemotes .. " safe remotes")
-        else
-            print("❌ _NetManaged folder not found")
-        end
-
-        -- Method 2: Try other SAFE discovered remotes with no parameters
+        -- Method 2: Try core networking events (from workspace scan)
         if not actualSuccess then
-            print("🔄 Method 2: Trying other SAFE remotes...")
+            print("🔄 Method 2: Core networking events...")
 
-            -- Filter to only safe remotes
-            local otherSafeRemotes = {}
-            for _, remote in pairs(remotes) do
-                local name = remote.Name:lower()
-                local path = remote:GetFullName():lower()
+            local coreEvents = ReplicatedStorage["events-@easy-games/game-core:shared/game-core-networking@getEvents.Events"]
+            if coreEvents then
+                print("✅ Found core networking events")
 
-                -- Use SAFE reward remotes that don't trigger bans
-                if (string.find(path, "net") or string.find(path, "managed")) and
-                   (string.find(name, "redeem") or string.find(name, "gift") or
-                    string.find(name, "reward") or string.find(name, "claim") or
-                    string.find(name, "collect") or string.find(name, "anniversary")) and
-                   -- EXCLUDE teleportation-related remotes
-                   not string.find(name, "portal") and
-                   not string.find(name, "teleport") and
-                   not string.find(name, "hub") and
-                   not string.find(name, "island") and
-                   not string.find(name, "gate") and
-                   not string.find(name, "transport") and
-                   not string.find(name, "travel") and
-                   not string.find(name, "spawn") and
-                   not (string.find(name, "ban") or string.find(name, "kick") or
-                        string.find(name, "report") or string.find(name, "admin")) then
+                -- Try various events that might handle item distribution
+                local eventsToTry = {
+                    "useAbility", "requestCodeGenUpdate", "sendCodeGenUpdate",
+                    "abilityUsed", "sendInfoNotification", "abilityProgressUpdate",
+                    "announcementEvent"
+                }
 
-                    table.insert(otherSafeRemotes, remote)
-                end
-            end
+                for _, eventName in pairs(eventsToTry) do
+                    if actualSuccess then break end
 
-            -- Try only safe remotes
-            for _, remote in pairs(otherSafeRemotes) do
-                if actualSuccess then break end
+                    pcall(function()
+                        local event = coreEvents[eventName]
+                        if event and event:IsA("RemoteEvent") then
+                            print("🔥 Trying core event: " .. eventName)
 
-                pcall(function()
-                    print("🔥 Trying other safe remote: " .. remote.Name)
+                            -- Try different parameter combinations
+                            event:FireServer(itemId, amount)
+                            event:FireServer({itemId = itemId, amount = amount})
+                            event:FireServer("give", itemId, amount)
+                            event:FireServer("reward", {itemId = itemId, amount = amount})
 
-                    -- Try calling with multiple parameter combinations
-                    if remote:IsA("RemoteEvent") then
-                        remote:FireServer()  -- No params (default random)
-                        remote:FireServer(itemId)  -- Item ID only
-                        remote:FireServer(itemId, amount)  -- ID and amount
-                        remote:FireServer({itemId = itemId, amount = amount})  -- Table format
-                        remote:FireServer("give", itemId, amount)  -- Command format
-                        remote:FireServer("reward", itemId, amount)  -- Reward format
-                    elseif remote:IsA("RemoteFunction") then
-                        remote:InvokeServer()  -- No params (default random)
-                        remote:InvokeServer(itemId)  -- Item ID only
-                        remote:InvokeServer(itemId, amount)  -- ID and amount
-                        remote:InvokeServer({itemId = itemId, amount = amount})  -- Table format
-                        remote:InvokeServer("give", itemId, amount)  -- Command format
-                        remote:InvokeServer("reward", itemId, amount)  -- Reward format
-                    end
+                            wait(0.3)
 
-                    wait(0.5)
-
-                    -- Verify if items were added to backpack (confirmed path)
-                    if targetPlayer.Backpack then
-                        local currentToolCount = #targetPlayer.Backpack:GetChildren()
-                        if currentToolCount > initialToolCount then
-                            actualSuccess = true
-                            print("✅ REAL SUCCESS: " .. remote.Name .. " added items to Backpack!")
-                        end
-                    end
-                end)
-            end
-
-            print("📊 Tried " .. #otherSafeRemotes .. " other safe remotes")
-        end
-
-        -- Method 3: Try to get specific item (Tier 2 Vending Machine ID 913)
-        if not actualSuccess then
-            print("🎯 Method 3: Trying to get specific item (ID " .. itemId .. ")...")
-
-            -- Try calling remotes with the specific item ID to see if it influences the reward
-            for _, remote in pairs(safeRemotes) do
-                if actualSuccess then break end
-
-                pcall(function()
-                    print("🎯 Trying to get item " .. itemId .. " via " .. remote.Name)
-
-                    -- Try multiple parameter combinations with the specific item ID
-                    if remote:IsA("RemoteEvent") then
-                        remote:FireServer(itemId)  -- Just the item ID
-                        remote:FireServer(itemId, 1)  -- Item ID with amount 1
-                        remote:FireServer({itemId = itemId, amount = 1})  -- Table format
-                        remote:FireServer("give", itemId)  -- Give command
-                        remote:FireServer("reward", itemId)  -- Reward command
-                    elseif remote:IsA("RemoteFunction") then
-                        remote:InvokeServer(itemId)  -- Just the item ID
-                        remote:InvokeServer(itemId, 1)  -- Item ID with amount 1
-                        remote:InvokeServer({itemId = itemId, amount = 1})  -- Table format
-                        remote:InvokeServer("give", itemId)  -- Give command
-                        remote:InvokeServer("reward", itemId)  -- Reward command
-                    end
-
-                    wait(0.3)  -- Shorter wait for specific item attempts
-
-                    -- Check if the specific item was added
-                    if targetPlayer.Backpack then
-                        local currentToolCount = #targetPlayer.Backpack:GetChildren()
-                        if currentToolCount > initialToolCount then
-                            -- Check if the specific item is now in inventory
-                            for _, tool in pairs(targetPlayer.Backpack:GetChildren()) do
-                                if tool.Name == "Tier 2 Vending Machine" or tool.Name == "Vending Machine" then
+                            -- Check if item was added
+                            if targetPlayer.Backpack then
+                                local currentCount = #targetPlayer.Backpack:GetChildren()
+                                if currentCount > initialToolCount then
                                     actualSuccess = true
-                                    print("🎉 SUCCESS! Got Tier 2 Vending Machine via " .. remote.Name)
-                                    break
+                                    print("✅ SUCCESS via core event: " .. eventName)
+                                end
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+
+        -- Method 3: Try core networking functions (from workspace scan)
+        if not actualSuccess then
+            print("🔄 Method 3: Core networking functions...")
+
+            local coreFunctions = ReplicatedStorage["functions-@easy-games/game-core:shared/game-core-networking@getFunctions.Functions"]
+            if coreFunctions then
+                print("✅ Found core networking functions")
+
+                -- Try redeem code function (most promising for item distribution)
+                pcall(function()
+                    local redeemFunction = coreFunctions["s:redeemCode"]
+                    if redeemFunction and redeemFunction:IsA("RemoteFunction") then
+                        print("🔥 Trying redeem code function")
+
+                        -- Try different code formats that might give items
+                        local codes = {
+                            "ITEM_" .. itemId .. "_" .. amount,
+                            "GIVE_" .. itemId,
+                            "REWARD_" .. itemId,
+                            tostring(itemId),
+                            {itemId = itemId, amount = amount}
+                        }
+
+                        for _, code in pairs(codes) do
+                            if actualSuccess then break end
+
+                            local success, result = pcall(function()
+                                return redeemFunction:InvokeServer(code)
+                            end)
+
+                            if success then
+                                print("📡 Redeem function returned: " .. tostring(result))
+                            end
+
+                            wait(0.2)
+
+                            -- Check if item was added
+                            if targetPlayer.Backpack then
+                                local currentCount = #targetPlayer.Backpack:GetChildren()
+                                if currentCount > initialToolCount then
+                                    actualSuccess = true
+                                    print("✅ SUCCESS via redeem function with code: " .. tostring(code))
                                 end
                             end
                         end
                     end
                 end)
             end
+        end
 
-            print("📊 Tried getting specific item via " .. #safeRemotes .. " remotes")
+        -- Method 4: Try lobby networking (from workspace scan)
+        if not actualSuccess then
+            print("🔄 Method 4: Lobby networking...")
+
+            local lobbyEvents = ReplicatedStorage["events-@easy-games/lobby:shared/lobby-networking@getEvents.Events"]
+            if lobbyEvents then
+                print("✅ Found lobby networking events")
+
+                -- Try party/join events that might distribute items
+                local eventsToTry = {"joinParty", "replicateClientData", "inviteToParty", "partyInfoEvent"}
+
+                for _, eventName in pairs(eventsToTry) do
+                    if actualSuccess then break end
+
+                    pcall(function()
+                        local event = lobbyEvents[eventName]
+                        if event and event:IsA("RemoteEvent") then
+                            print("🔥 Trying lobby event: " .. eventName)
+
+                            event:FireServer(itemId, amount)
+                            event:FireServer({itemId = itemId, amount = amount})
+                            event:FireServer("give", itemId, amount)
+
+                            wait(0.2)
+
+                            -- Check if item was added
+                            if targetPlayer.Backpack then
+                                local currentCount = #targetPlayer.Backpack:GetChildren()
+                                if currentCount > initialToolCount then
+                                    actualSuccess = true
+                                    print("✅ SUCCESS via lobby event: " .. eventName)
+                                end
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+
+        -- Method 5: Try direct tool spawning from ReplicatedStorage
+        if not actualSuccess then
+            print("🔄 Method 5: Direct tool spawning...")
+
+            -- Try to find the item in ReplicatedStorage.Tools and clone it
+            pcall(function()
+                local toolTemplate = ReplicatedStorage.Tools:FindFirstChild("Tier 2 Vending Machine") or
+                                   ReplicatedStorage.Tools:FindFirstChild("Vending Machine")
+
+                if toolTemplate and toolTemplate:IsA("Tool") then
+                    print("✅ Found tool template: " .. toolTemplate.Name)
+
+                    -- Try to add the tool directly to backpack
+                    local clonedTool = toolTemplate:Clone()
+                    if clonedTool then
+                        clonedTool.Parent = targetPlayer.Backpack
+                        print("🔥 Added tool directly to backpack")
+
+                        -- Check if it worked
+                        if targetPlayer.Backpack then
+                            local currentCount = #targetPlayer.Backpack:GetChildren()
+                            if currentCount > initialToolCount then
+                                actualSuccess = true
+                                print("✅ SUCCESS via direct tool spawning")
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+
+        -- Method 6: Try InventoryUpdateEvent with specific parameters
+        if not actualSuccess then
+            print("🔄 Method 6: InventoryUpdateEvent manipulation...")
+
+            local inventoryUpdateEvent = targetPlayer:FindFirstChild("InventoryUpdateEvent")
+            if inventoryUpdateEvent and inventoryUpdateEvent:IsA("RemoteEvent") then
+                print("✅ Found InventoryUpdateEvent")
+
+                -- Try various parameter combinations to add items
+                local paramsToTry = {
+                    {itemId, amount},
+                    {itemId = itemId, amount = amount},
+                    {"add", itemId, amount},
+                    {"give", itemId, amount},
+                    {"reward", itemId, amount},
+                    {action = "add", itemId = itemId, amount = amount}
+                }
+
+                for _, params in pairs(paramsToTry) do
+                    if actualSuccess then break end
+
+                    pcall(function()
+                        print("🔥 Trying InventoryUpdateEvent with params: " .. tostring(params))
+                        inventoryUpdateEvent:FireServer(unpack(params))
+
+                        wait(0.2)
+
+                        -- Check if item was added
+                        if targetPlayer.Backpack then
+                            local currentCount = #targetPlayer.Backpack:GetChildren()
+                            if currentCount > initialToolCount then
+                                actualSuccess = true
+                                print("✅ SUCCESS via InventoryUpdateEvent")
+                            end
+                        end
+                    end)
+                end
+            end
         end
 
         -- Final verification
@@ -1899,7 +1918,6 @@ function addItem()
         if targetPlayer.Backpack then
             finalToolCount = #targetPlayer.Backpack:GetChildren()
             print("📊 Final backpack count: " .. finalToolCount)
-            -- List final items
             for _, tool in pairs(targetPlayer.Backpack:GetChildren()) do
                 print("   • " .. tool.Name)
             end
@@ -1908,44 +1926,21 @@ function addItem()
         local itemsAdded = finalToolCount - initialToolCount
         print("📈 Items added: " .. itemsAdded)
 
-        -- Only report success if items were actually added
+        -- Report results
         if actualSuccess and itemsAdded > 0 then
-            print("🎉 REAL SUCCESS! Added " .. itemsAdded .. " items to jdiishere6's inventory")
-            print("💾 Items are now in the backpack and should be visible")
+            print("🎉 SUCCESS! Added " .. itemsAdded .. " items to jdiishere6's inventory")
 
-            -- Try to trigger InventoryUpdateEvent to refresh UI
+            -- Trigger UI refresh
             pcall(function()
                 local inventoryUpdateEvent = targetPlayer:FindFirstChild("InventoryUpdateEvent")
-                if inventoryUpdateEvent and inventoryUpdateEvent:IsA("RemoteEvent") then
-                    print("🔄 Triggering InventoryUpdateEvent to refresh UI...")
-                    inventoryUpdateEvent:FireServer()
+                if inventoryUpdateEvent then
                     inventoryUpdateEvent:FireServer("refresh")
                     inventoryUpdateEvent:FireServer({action = "refresh"})
-                    inventoryUpdateEvent:FireServer({type = "inventory", action = "update"})
-                else
-                    print("⚠️ InventoryUpdateEvent not found at player level")
-                end
-            end)
-
-            -- Trigger notification
-            pcall(function()
-                local playerGui = targetPlayer:FindFirstChild("PlayerGui")
-                if playerGui then
-                    for _, gui in pairs(playerGui:GetDescendants()) do
-                        if gui:IsA("TextLabel") and string.find(gui.Name:lower(), "notification") then
-                            gui.Text = "🎉 Received items!"
-                            if gui:FindFirstChild("Visible") then
-                                gui.Visible = true
-                                wait(3)
-                                gui.Visible = false
-                            end
-                        end
-                    end
                 end
             end)
         else
-            print("❌ FAILED: No items were actually added to inventory")
-            print("💡 Try different remotes or check if the game has restrictions")
+            print("❌ FAILED: No items were added to inventory")
+            print("💡 Try different methods or check workspace scan data")
         end
 
         local duration = tick() - startTime
