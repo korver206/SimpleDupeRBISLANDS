@@ -828,6 +828,8 @@ end
 
 -- Scan for all remotes
 function scanRemotes()
+    print("🔍 Scanning for remotes...")
+
     local locations = {ReplicatedStorage, game.Workspace, LocalPlayer, game.Players}
 
     -- Add all services
@@ -853,6 +855,8 @@ function scanRemotes()
         table.insert(locations, game:GetService("StarterPlayer"))
     end
 
+    local initialCount = #remotes
+
     for _, location in pairs(locations) do
         pcall(function()
             for _, obj in pairs(location:GetDescendants()) do
@@ -867,7 +871,7 @@ function scanRemotes()
                     end
                     if not exists then
                         table.insert(remotes, obj)
-                        print("Found remote: " .. obj.Name .. " (" .. obj.ClassName .. ") at " .. obj:GetFullName())
+                        print("✅ Found remote: " .. obj.Name .. " (" .. obj.ClassName .. ") at " .. obj:GetFullName())
                     end
                 end
             end
@@ -893,27 +897,90 @@ function scanRemotes()
                 end
                 if not exists then
                     table.insert(remotes, obj)
-                    print("Found priority remote: " .. obj.Name .. " (" .. obj.ClassName .. ") at " .. obj:GetFullName())
+                    print("🎯 Found priority remote: " .. obj.Name .. " (" .. obj.ClassName .. ") at " .. obj:GetFullName())
                 end
             end
         end
     end)
 
-    print("Total remotes found: " .. #remotes)
+    -- Try to find ALL remotes as a fallback
+    pcall(function()
+        for _, obj in pairs(game:GetDescendants()) do
+            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                local exists = false
+                for _, existing in pairs(remotes) do
+                    if existing == obj then
+                        exists = true
+                        break
+                    end
+                end
+                if not exists then
+                    table.insert(remotes, obj)
+                    print("📡 Found additional remote: " .. obj.Name .. " (" .. obj.ClassName .. ")")
+                end
+            end
+        end
+    end)
+
+    local finalCount = #remotes
+    print("📊 Remote scan complete: " .. finalCount .. " remotes found (" .. (finalCount - initialCount) .. " new)")
 end
 
 -- Scan for all functions
 function scanFunctions()
+    print("🔍 Scanning for functions...")
+
+    local initialCount = #funcs
+
+    -- Get all garbage collected functions
     for _, func in pairs(getgc()) do
         if type(func) == "function" then
             local info = debug.getinfo(func)
-            if info.name then
-                table.insert(funcs, func)
-                print("Found function: " .. info.name)
+            if info.name and info.name ~= "" then
+                -- Check if we already have this function
+                local exists = false
+                for _, existing in pairs(funcs) do
+                    if existing == func then
+                        exists = true
+                        break
+                    end
+                end
+                if not exists then
+                    table.insert(funcs, func)
+                    print("✅ Found function: " .. info.name)
+                end
             end
         end
     end
-    print("Total functions found: " .. #funcs)
+
+    -- Also try to find functions in modules
+    pcall(function()
+        for _, obj in pairs(game:GetDescendants()) do
+            if obj:IsA("ModuleScript") then
+                local success, result = pcall(require, obj)
+                if success and type(result) == "table" then
+                    for key, value in pairs(result) do
+                        if type(value) == "function" then
+                            local exists = false
+                            for _, existing in pairs(funcs) do
+                                if existing == value then
+                                    exists = true
+                                    break
+                                end
+                            end
+                            if not exists then
+                                table.insert(funcs, value)
+                                print("📚 Found module function: " .. tostring(key) .. " in " .. obj.Name)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+
+    local finalCount = #funcs
+    print("📊 Function scan complete: " .. finalCount .. " functions found (" .. (finalCount - initialCount) .. " new)")
 end
 
 -- Advanced function scanner for Islands-specific methods
@@ -1662,9 +1729,19 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 -- Main loop
+print("🔍 Starting remote and function scanning...")
 scanRemotes()
 scanFunctions()
 scanForItemMethods() -- Advanced item method scanning
+
+-- Wait a moment for scanning to complete
+print("⏳ Waiting for scans to complete...")
+task.wait(1)
+
+print("📊 Scan results:")
+print("   - Remotes found: " .. #remotes)
+print("   - Functions found: " .. #funcs)
+
 createUI()
 
 while not exitScript do
