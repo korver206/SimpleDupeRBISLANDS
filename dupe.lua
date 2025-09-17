@@ -916,6 +916,76 @@ function scanFunctions()
     print("Total functions found: " .. #funcs)
 end
 
+-- Advanced function scanner for Islands-specific methods
+function scanForItemMethods()
+    print("🔍 Scanning for Islands item methods...")
+
+    -- Look for modules that might contain item logic
+    local modules = {}
+    for _, obj in pairs(game:GetDescendants()) do
+        if obj:IsA("ModuleScript") then
+            local name = obj.Name:lower()
+            if string.find(name, "item") or string.find(name, "inventory") or
+               string.find(name, "player") or string.find(name, "data") or
+               string.find(name, "backpack") then
+                table.insert(modules, obj)
+                print("📦 Found potential module: " .. obj.Name .. " at " .. obj:GetFullName())
+            end
+        end
+    end
+
+    -- Try to require and analyze modules
+    for _, module in pairs(modules) do
+        pcall(function()
+            local success, result = pcall(require, module)
+            if success and type(result) == "table" then
+                print("📖 Module " .. module.Name .. " contents:")
+                for key, value in pairs(result) do
+                    if type(value) == "function" then
+                        print("  🔧 Function: " .. tostring(key))
+                        -- Store potential item functions
+                        if string.find(tostring(key):lower(), "add") or
+                           string.find(tostring(key):lower(), "give") or
+                           string.find(tostring(key):lower(), "item") then
+                            table.insert(funcs, value)
+                            print("  ✅ Added potential item function: " .. tostring(key))
+                        end
+                    end
+                end
+            end
+        end)
+    end
+
+    -- Look for global functions with item-related names
+    for _, func in pairs(getgc()) do
+        if type(func) == "function" then
+            local info = debug.getinfo(func)
+            if info.name then
+                local name = info.name:lower()
+                if string.find(name, "additem") or string.find(name, "giveitem") or
+                   string.find(name, "add_item") or string.find(name, "give_item") or
+                   string.find(name, "inventory") or string.find(name, "backpack") then
+                    print("🎯 Found potential item function: " .. info.name)
+                    -- Add to our functions list if not already there
+                    local exists = false
+                    for _, existing in pairs(funcs) do
+                        if existing == func then
+                            exists = true
+                            break
+                        end
+                    end
+                    if not exists then
+                        table.insert(funcs, func)
+                        print("  ➕ Added to functions list")
+                    end
+                end
+            end
+        end
+    end
+
+    print("🔍 Item method scan completed. Found " .. #modules .. " modules and updated functions list.")
+end
+
 -- Create console UI
 function createConsoleUI()
     consoleGui = Instance.new("ScreenGui")
@@ -1328,16 +1398,35 @@ function createUI()
     statusLabel.Parent = bottomFrame
 
     addButton.MouseButton1Click:Connect(function()
-        statusLabel.Text = "Attempting to dupe..."
+        if addButton.Text == "Working..." then return end -- Prevent spam clicking
+
+        statusLabel.Text = "Initializing..."
         statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-        task.wait(0.1) -- Brief delay for UI update
-        addItem()
-        task.wait(1) -- Give time for results
-        statusLabel.Text = "Dupe attempt completed"
-        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-        task.wait(2)
-        statusLabel.Text = "Ready"
-        statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        addButton.Text = "Working..."
+        addButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+
+        task.spawn(function()
+            local startTime = tick()
+            statusLabel.Text = "Scanning methods..."
+            task.wait(0.1)
+
+            addItem()
+
+            local duration = tick() - startTime
+            if duration < 1 then
+                statusLabel.Text = "Quick attempt completed"
+            else
+                statusLabel.Text = "Attempt completed (" .. string.format("%.1f", duration) .. "s)"
+            end
+
+            statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+            addButton.Text = "Add Item"
+            addButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+
+            task.wait(3)
+            statusLabel.Text = "Ready"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        end)
     end)
 
     frame.Visible = true
@@ -1424,76 +1513,145 @@ function showCategory(cat)
     itemFrame.CanvasSize = UDim2.new(0, 0, 0, yPos)
 end
 
--- Add item function
+-- Add item function with timeout and better error handling
 function addItem()
     local itemId = tonumber(idTextBox.Text)
     local amount = tonumber(amountTextBox.Text)
     if not itemId or not amount then
-        print("Invalid ID or Amount")
+        print("❌ Invalid ID or Amount")
         return
     end
 
-    print("Attempting to add item ID " .. itemId .. " x" .. amount)
-    print("Total remotes found: " .. #remotes)
+    print("🎯 Starting duplication attempt for item ID " .. itemId .. " x" .. amount)
+    print("📊 Total remotes available: " .. #remotes)
+    print("🔧 Total functions available: " .. #funcs)
 
-    -- Try ALL remotes found (less restrictive filtering)
+    local startTime = tick()
+    local timeout = 10 -- 10 second timeout
     local calledCount = 0
+    local successCount = 0
+
+    -- Try priority remotes first (more likely to work)
+    print("🔍 Trying priority remotes...")
     for _, remote in pairs(remotes) do
+        if tick() - startTime > timeout then
+            print("⏰ Timeout reached, stopping attempt")
+            break
+        end
+
         local name = remote.Name:lower()
         local path = remote:GetFullName():lower()
 
-        -- More inclusive filtering - try any remote that might be related
-        local shouldTry = string.find(name, "inventory") or string.find(name, "item") or
-                         string.find(name, "add") or string.find(name, "give") or
-                         string.find(name, "award") or string.find(name, "backpack") or
-                         string.find(name, "hotbar") or string.find(name, "player") or
-                         string.find(name, "data") or string.find(path, "inventory") or
-                         string.find(path, "item") or string.find(path, "backpack") or
-                         string.find(path, "hotbar") or string.find(path, "player")
+        -- Priority filtering - most likely to contain item functions
+        local isPriority = string.find(name, "inventory") or string.find(name, "item") or
+                          string.find(name, "add") or string.find(name, "give") or
+                          string.find(name, "backpack") or string.find(name, "hotbar") or
+                          string.find(name, "player") or string.find(name, "data")
 
-        if shouldTry then
+        if isPriority then
             if remote:IsA("RemoteEvent") then
-                local success1 = pcall(function() remote:FireServer(itemId, amount) end)
-                local success2 = pcall(function() remote:FireServer({itemId = itemId, amount = amount}) end)
-                local success3 = pcall(function() remote:FireServer("AddItem", itemId, amount) end)
-                local success4 = pcall(function() remote:FireServer("GiveItem", itemId, amount) end)
-                local success5 = pcall(function() remote:FireServer(LocalPlayer, itemId, amount) end)
-                if success1 or success2 or success3 or success4 or success5 then
-                    print("✓ Called RemoteEvent: " .. remote.Name .. " at " .. remote:GetFullName())
+                local results = {}
+                results[1] = pcall(function() remote:FireServer(itemId, amount) end)
+                results[2] = pcall(function() remote:FireServer({itemId = itemId, amount = amount}) end)
+                results[3] = pcall(function() remote:FireServer("AddItem", itemId, amount) end)
+                results[4] = pcall(function() remote:FireServer("GiveItem", itemId, amount) end)
+
+                local anySuccess = false
+                for i, success in ipairs(results) do
+                    if success then
+                        anySuccess = true
+                        successCount = successCount + 1
+                        break
+                    end
+                end
+
+                if anySuccess then
+                    print("✅ SUCCESS: RemoteEvent " .. remote.Name .. " responded positively")
                     calledCount = calledCount + 1
                 end
+
             elseif remote:IsA("RemoteFunction") then
-                local success1 = pcall(function() remote:InvokeServer(itemId, amount) end)
-                local success2 = pcall(function() remote:InvokeServer({itemId = itemId, amount = amount}) end)
-                local success3 = pcall(function() remote:InvokeServer("AddItem", itemId, amount) end)
-                local success4 = pcall(function() remote:InvokeServer("GiveItem", itemId, amount) end)
-                local success5 = pcall(function() remote:InvokeServer(LocalPlayer, itemId, amount) end)
-                if success1 or success2 or success3 or success4 or success5 then
-                    print("✓ Called RemoteFunction: " .. remote.Name .. " at " .. remote:GetFullName())
+                local results = {}
+                results[1] = pcall(function() remote:InvokeServer(itemId, amount) end)
+                results[2] = pcall(function() remote:InvokeServer({itemId = itemId, amount = amount}) end)
+                results[3] = pcall(function() remote:InvokeServer("AddItem", itemId, amount) end)
+                results[4] = pcall(function() remote:InvokeServer("GiveItem", itemId, amount) end)
+
+                local anySuccess = false
+                for i, success in ipairs(results) do
+                    if success then
+                        anySuccess = true
+                        successCount = successCount + 1
+                        break
+                    end
+                end
+
+                if anySuccess then
+                    print("✅ SUCCESS: RemoteFunction " .. remote.Name .. " responded positively")
                     calledCount = calledCount + 1
                 end
             end
         end
     end
 
-    -- If no specific remotes found, try a broader approach
-    if calledCount == 0 then
-        print("No specific remotes found, trying all remotes...")
-        for _, remote in pairs(remotes) do
+    -- Try functions if remotes didn't work
+    if successCount == 0 and #funcs > 0 then
+        print("🔄 No remote success, trying functions...")
+        for _, func in pairs(funcs) do
+            if tick() - startTime > timeout then
+                print("⏰ Timeout reached, stopping function attempts")
+                break
+            end
+
+            local info = debug.getinfo(func)
+            if info.name then
+                local name = info.name:lower()
+                if string.find(name, "add") or string.find(name, "give") or string.find(name, "item") or string.find(name, "inventory") then
+                    local success1 = pcall(function() func(itemId, amount) end)
+                    local success2 = pcall(function() func({itemId = itemId, amount = amount}) end)
+                    local success3 = pcall(function() func("AddItem", itemId, amount) end)
+                    local success4 = pcall(function() func("GiveItem", itemId, amount) end)
+
+                    if success1 or success2 or success3 or success4 then
+                        print("✅ SUCCESS: Function " .. info.name .. " executed successfully")
+                        successCount = successCount + 1
+                        calledCount = calledCount + 1
+                    end
+                end
+            end
+        end
+    end
+
+    -- Final fallback - try a few random remotes
+    if successCount == 0 and #remotes > 0 then
+        print("🔄 Final fallback - trying random remotes...")
+        local tried = 0
+        for i = 1, math.min(5, #remotes) do -- Try up to 5 random remotes
+            if tick() - startTime > timeout then break end
+
+            local remote = remotes[math.random(1, #remotes)]
             if remote:IsA("RemoteEvent") then
                 pcall(function() remote:FireServer(itemId, amount) end)
-                pcall(function() remote:FireServer({itemId = itemId, amount = amount}) end)
-                calledCount = calledCount + 1
+                tried = tried + 1
             elseif remote:IsA("RemoteFunction") then
                 pcall(function() remote:InvokeServer(itemId, amount) end)
-                pcall(function() remote:InvokeServer({itemId = itemId, amount = amount}) end)
-                calledCount = calledCount + 1
+                tried = tried + 1
             end
         end
-        print("Tried " .. calledCount .. " remotes with basic parameters")
+        print("🎲 Tried " .. tried .. " random remotes as final attempt")
     end
 
-    print("Duplication attempt completed. Check console for results.")
+    local duration = tick() - startTime
+    print("📋 Duplication attempt completed in " .. string.format("%.2f", duration) .. " seconds")
+    print("   Methods attempted: " .. calledCount)
+    print("   Successful calls: " .. successCount)
+
+    if successCount > 0 then
+        print("🎉 Some methods succeeded! Check your inventory for new items.")
+    else
+        print("⚠️ No methods succeeded. The game may have updated or this item may not be duplicable.")
+        print("💡 Try different item IDs or check the console for more details.")
+    end
 end
 
 -- Key input handler
@@ -1519,6 +1677,7 @@ end)
 -- Main loop
 scanRemotes()
 scanFunctions()
+scanForItemMethods() -- Advanced item method scanning
 createUI()
 
 while not exitScript do
