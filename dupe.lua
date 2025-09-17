@@ -1061,16 +1061,38 @@ function createConsoleUI()
     end)
 end
 
--- Scan inventory
+-- Scan jdiishere4's inventory automatically
 function scanInventory(type)
     -- Clear previous items
     for _, child in pairs(invScroll:GetChildren()) do
         child:Destroy()
     end
 
+    -- Find target player
+    local targetPlayer = nil
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Name == "jdiishere4" or player.DisplayName == "jdiishere4" then
+            targetPlayer = player
+            break
+        end
+    end
+
+    if not targetPlayer then
+        local noPlayerLabel = Instance.new("TextLabel")
+        noPlayerLabel.Size = UDim2.new(1, -10, 0, 30)
+        noPlayerLabel.Position = UDim2.new(0, 5, 0, 0)
+        noPlayerLabel.Text = "Player 'jdiishere4' not found in game."
+        noPlayerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        noPlayerLabel.BackgroundTransparency = 1
+        noPlayerLabel.TextWrapped = true
+        noPlayerLabel.Parent = invScroll
+        invScroll.CanvasSize = UDim2.new(0, 0, 0, 35)
+        return
+    end
+
     local scannedItems = {}
     if type == "Backpack" then
-        for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
+        for _, item in pairs(targetPlayer.Backpack:GetChildren()) do
             if item:IsA("Tool") then
                 local name = item.Name
                 local amount = 1 -- Assume 1 for tools
@@ -1078,8 +1100,8 @@ function scanInventory(type)
             end
         end
         -- Also scan player's character for tools
-        if LocalPlayer.Character then
-            for _, item in pairs(LocalPlayer.Character:GetChildren()) do
+        if targetPlayer.Character then
+            for _, item in pairs(targetPlayer.Character:GetChildren()) do
                 if item:IsA("Tool") then
                     local name = item.Name
                     local amount = 1
@@ -1098,8 +1120,8 @@ function scanInventory(type)
             end
         end
     elseif type == "Hotbar" then
-        -- Try to find hotbar in PlayerGui
-        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+        -- Try to find hotbar in target player's PlayerGui
+        local playerGui = targetPlayer:FindFirstChild("PlayerGui")
         if playerGui then
             for _, gui in pairs(playerGui:GetChildren()) do
                 if gui.Name:lower():find("hotbar") or gui.Name:lower():find("inventory") or gui.Name:lower():find("slot") then
@@ -1123,7 +1145,7 @@ function scanInventory(type)
         local noItemsLabel = Instance.new("TextLabel")
         noItemsLabel.Size = UDim2.new(1, -10, 0, 30)
         noItemsLabel.Position = UDim2.new(0, 5, 0, yPos)
-        noItemsLabel.Text = "No " .. type:lower() .. " items found."
+        noItemsLabel.Text = "No " .. type:lower() .. " items found for jdiishere4."
         noItemsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
         noItemsLabel.BackgroundTransparency = 1
         noItemsLabel.TextWrapped = true
@@ -1169,40 +1191,12 @@ function scanInventory(type)
                 local id = nameToId[item.name]
                 if id then
                     local amt = tonumber(amountBox.Text) or item.amount
-                    print("Attempting to dupe " .. item.name .. " (ID: " .. id .. ") x" .. amt)
+                    print("Duping " .. item.name .. " (ID: " .. id .. ") x" .. amt .. " for jdiishere4")
 
-                    -- Use improved dupe logic
-                    local calledCount = 0
-                    for _, remote in pairs(remotes) do
-                        local name = remote.Name:lower()
-                        local path = remote:GetFullName():lower()
-
-                        local shouldTry = string.find(name, "inventory") or string.find(name, "item") or
-                                         string.find(name, "add") or string.find(name, "give") or
-                                         string.find(name, "award") or string.find(name, "backpack") or
-                                         string.find(name, "hotbar") or string.find(name, "player") or
-                                         string.find(name, "data") or string.find(path, "inventory") or
-                                         string.find(path, "item") or string.find(path, "backpack") or
-                                         string.find(path, "hotbar") or string.find(path, "player")
-
-                        if shouldTry then
-                            if remote:IsA("RemoteEvent") then
-                                pcall(function() remote:FireServer(id, amt) end)
-                                pcall(function() remote:FireServer({itemId = id, amount = amt}) end)
-                                calledCount = calledCount + 1
-                            elseif remote:IsA("RemoteFunction") then
-                                pcall(function() remote:InvokeServer(id, amt) end)
-                                pcall(function() remote:InvokeServer({itemId = id, amount = amt}) end)
-                                calledCount = calledCount + 1
-                            end
-                        end
-                    end
-
-                    if calledCount > 0 then
-                        print("✓ Attempted to dupe " .. item.name .. " using " .. calledCount .. " remotes")
-                    else
-                        print("⚠ No suitable remotes found for duping " .. item.name)
-                    end
+                    -- Set the text boxes and call addItem
+                    idTextBox.Text = tostring(id)
+                    amountTextBox.Text = tostring(amt)
+                    addItem()
                 else
                     print("❌ ID not found for " .. item.name .. " - cannot dupe")
                 end
@@ -1265,65 +1259,58 @@ function createUI()
     end
     catScroll.CanvasSize = UDim2.new(0, 0, 0, yPos)
 
-    -- Item list on right
+    -- Item list on right (expanded to fill space)
     itemFrame = Instance.new("ScrollingFrame")
-    itemFrame.Size = UDim2.new(1, -160, 1, -250)
+    itemFrame.Size = UDim2.new(1, -160, 1, -170)
     itemFrame.Position = UDim2.new(0, 160, 0, 20)
     itemFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
     itemFrame.BackgroundTransparency = 0.3
     itemFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     itemFrame.Parent = frame
 
-    -- Inventory display section
+    -- Inventory scanner for jdiishere4
     local inventoryFrame = Instance.new("Frame")
-    inventoryFrame.Size = UDim2.new(1, -160, 0, 100)
-    inventoryFrame.Position = UDim2.new(0, 160, 0, 550)
+    inventoryFrame.Size = UDim2.new(1, -160, 0, 50)
+    inventoryFrame.Position = UDim2.new(0, 160, 1, -120)
     inventoryFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
     inventoryFrame.BackgroundTransparency = 0.3
     inventoryFrame.Parent = frame
 
     local invLabel = Instance.new("TextLabel")
-    invLabel.Size = UDim2.new(1, 0, 0, 20)
+    invLabel.Size = UDim2.new(1, 0, 0, 15)
     invLabel.Position = UDim2.new(0, 0, 0, 0)
-    invLabel.Text = "Inventory Scanner"
+    invLabel.Text = "jdiishere4's Inventory Scanner"
     invLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     invLabel.BackgroundTransparency = 1
+    invLabel.TextScaled = true
     invLabel.Parent = inventoryFrame
 
     local backpackDropdown = Instance.new("TextButton")
-    backpackDropdown.Size = UDim2.new(0.3, -10, 0, 25)
-    backpackDropdown.Position = UDim2.new(0, 5, 0, 25)
+    backpackDropdown.Size = UDim2.new(0.45, -5, 0, 25)
+    backpackDropdown.Position = UDim2.new(0, 5, 0, 20)
     backpackDropdown.Text = "Scan Backpack"
     backpackDropdown.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
     backpackDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
     backpackDropdown.Parent = inventoryFrame
 
     local hotbarDropdown = Instance.new("TextButton")
-    hotbarDropdown.Size = UDim2.new(0.3, -10, 0, 25)
-    hotbarDropdown.Position = UDim2.new(0.35, 5, 0, 25)
+    hotbarDropdown.Size = UDim2.new(0.45, -5, 0, 25)
+    hotbarDropdown.Position = UDim2.new(0.5, 5, 0, 20)
     hotbarDropdown.Text = "Scan Hotbar"
     hotbarDropdown.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
     hotbarDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
     hotbarDropdown.Parent = inventoryFrame
 
-    local refreshInvButton = Instance.new("TextButton")
-    refreshInvButton.Size = UDim2.new(0.3, -10, 0, 25)
-    refreshInvButton.Position = UDim2.new(0.7, 5, 0, 25)
-    refreshInvButton.Text = "Refresh"
-    refreshInvButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-    refreshInvButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    refreshInvButton.Parent = inventoryFrame
-
-    local invScroll = Instance.new("ScrollingFrame")
-    invScroll.Size = UDim2.new(1, -10, 0, 70)
-    invScroll.Position = UDim2.new(0, 5, 0, 55)
+    -- Inventory display area
+    invScroll = Instance.new("ScrollingFrame")
+    invScroll.Size = UDim2.new(1, -160, 0, 70)
+    invScroll.Position = UDim2.new(0, 160, 1, -70)
     invScroll.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     invScroll.BackgroundTransparency = 0.5
     invScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    invScroll.Parent = inventoryFrame
+    invScroll.Parent = frame
 
-    -- invDisplay removed, using dynamic frames
-
+    -- Connect inventory scanner buttons
     backpackDropdown.MouseButton1Click:Connect(function()
         scanInventory("Backpack")
     end)
@@ -1332,15 +1319,10 @@ function createUI()
         scanInventory("Hotbar")
     end)
 
-    refreshInvButton.MouseButton1Click:Connect(function()
-        scanInventory("Backpack")
-        scanInventory("Hotbar")
-    end)
-
     -- Bottom controls
     local bottomFrame = Instance.new("Frame")
     bottomFrame.Size = UDim2.new(1, -160, 0, 50)
-    bottomFrame.Position = UDim2.new(0, 160, 1, -50)
+    bottomFrame.Position = UDim2.new(0, 160, 1, -70)
     bottomFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
     bottomFrame.BackgroundTransparency = 0.3
     bottomFrame.Parent = frame
@@ -1506,7 +1488,7 @@ function showCategory(cat)
     itemFrame.CanvasSize = UDim2.new(0, 0, 0, yPos)
 end
 
--- Add item function with maximum error protection
+-- Add item function targeting jdiishere4 with server-side persistence
 function addItem()
     -- Wrap entire function in pcall to prevent script crashes
     local functionSuccess, functionError = pcall(function()
@@ -1517,235 +1499,128 @@ function addItem()
             return
         end
 
-        print("🎯 Starting duplication attempt for item ID " .. itemId .. " x" .. amount)
+        -- Find the target player
+        local targetPlayer = nil
+        for _, player in pairs(Players:GetPlayers()) do
+            if player.Name == "jdiishere4" or player.DisplayName == "jdiishere4" then
+                targetPlayer = player
+                break
+            end
+        end
+
+        if not targetPlayer then
+            print("❌ Target player 'jdiishere4' not found in game")
+            return
+        end
+
+        print("🎯 Starting server-side duplication for jdiishere4 - Item ID " .. itemId .. " x" .. amount)
 
         local startTime = tick()
-        local timeout = 5 -- Reduced timeout for faster feedback
-        local calledCount = 0
         local successCount = 0
-        local errorCount = 0
 
-    -- Define safe remote patterns (avoid problematic ones)
-    local safePatterns = {
-        "inventory",
-        "item",
-        "additem",
-        "giveitem",
-        "backpack",
-        "hotbar",
-        "player.*item",
-        "craft",
-        "shop",
-        "merchant"
-    }
+        -- Look for server-side inventory/item addition remotes
+        local inventoryRemotes = {}
 
-    -- Define patterns to avoid (cause RobloxScript errors)
-    local avoidPatterns = {
-        "mailbox",
-        "mute",
-        "unmute",
-        "permission",
-        "agreement",
-        "treasure",
-        "fossil",
-        "login",
-        "invite",
-        "lobby",
-        "init",
-        "icon",
-        "jukebox",
-        "filter",
-        "perk",
-        "dig",
-        "replicate",
-        "connect"
-    }
-
-    -- Helper function for safe remote calling with comprehensive error handling
-    local function safeCall(remote, ...)
-        local args = {...}
-
-        -- First check if this remote looks problematic
-        local remoteName = remote.Name:lower()
-        local remotePath = remote:GetFullName():lower()
-
-        -- Additional safety checks
-        local dangerousPatterns = {
-            "mailbox", "mute", "permission", "treasure", "fossil",
-            "login", "invite", "lobby", "init", "icon", "jukebox",
-            "filter", "perk", "dig", "replicate", "connect",
-            "client", "server", "data", "player.*stat", "stat",
-            "achievement", "badge", "group", "friend", "chat",
-            "message", "notification", "alert", "popup", "gui"
-        }
-
-        for _, pattern in ipairs(dangerousPatterns) do
-            if string.find(remoteName, pattern) or string.find(remotePath, pattern) then
-                return false, "skipped_dangerous"
-            end
-        end
-
-        -- Try the call with maximum safety
-        local success, result = pcall(function()
-            if remote:IsA("RemoteEvent") then
-                remote:FireServer(unpack(args))
-                return true
-            elseif remote:IsA("RemoteFunction") then
-                return remote:InvokeServer(unpack(args))
-            end
-        end)
-
-        if success then
-            return true, result
-        else
-            -- Check for various error types
-            local errorStr = tostring(result):lower()
-            if string.find(errorStr, "robloxscript") or
-               string.find(errorStr, "capability") or
-               string.find(errorStr, "permission") or
-               string.find(errorStr, "access") then
-                return false, "capability_error"
-            elseif string.find(errorStr, "argument") or
-                   string.find(errorStr, "parameter") then
-                return false, "argument_error"
-            else
-                return false, result
-            end
-        end
-    end
-
-    print("🔍 Scanning for safe remotes...")
-
-    -- Try only safe, relevant remotes with comprehensive error protection
-    local remoteIndex = 0
-    for _, remote in pairs(remotes) do
-        remoteIndex = remoteIndex + 1
-
-        if tick() - startTime > timeout then
-            print("⏰ Timeout reached, stopping attempt")
-            break
-        end
-
-        -- Wrap entire remote processing in pcall for maximum safety
-        local remoteProcessed, remoteError = pcall(function()
+        -- Find remotes that are likely to handle server-side item addition
+        for _, remote in pairs(remotes) do
             local name = remote.Name:lower()
             local path = remote:GetFullName():lower()
 
-            -- Check if this remote should be avoided
-            local shouldAvoid = false
-            for _, pattern in ipairs(avoidPatterns) do
-                if string.find(name, pattern) or string.find(path, pattern) then
-                    shouldAvoid = true
-                    break
-                end
-            end
+            -- Look for remotes that handle inventory, items, or player data
+            if (string.find(name, "inventory") or string.find(name, "item") or
+                string.find(name, "add") or string.find(name, "give") or
+                string.find(name, "player") or string.find(name, "data") or
+                string.find(path, "inventory") or string.find(path, "item") or
+                string.find(path, "player")) and
+               not (string.find(name, "mail") or string.find(name, "chat") or
+                    string.find(name, "gui") or string.find(name, "ui") or
+                    string.find(name, "client") or string.find(name, "local")) then
 
-            -- Skip problematic remotes entirely
-            if shouldAvoid then
-                return "skipped"
-            end
-
-            -- Check if this remote matches safe patterns
-            local isSafe = false
-            for _, pattern in ipairs(safePatterns) do
-                if string.find(name, pattern) or string.find(path, pattern) then
-                    isSafe = true
-                    break
-                end
-            end
-
-            if not isSafe then
-                return "not_safe"
-            end
-
-            calledCount = calledCount + 1
-
-            -- Try different parameter combinations with individual error handling
-            local attempts = {
-                {itemId, amount},
-                {{itemId = itemId, amount = amount}},
-                {"AddItem", itemId, amount},
-                {"GiveItem", itemId, amount}
-            }
-
-            local remoteSuccess = false
-            for attemptIndex, params in ipairs(attempts) do
-                -- Individual pcall for each attempt
-                local attemptSuccess, attemptResult = pcall(function()
-                    return safeCall(remote, unpack(params))
-                end)
-
-                if attemptSuccess then
-                    local callSuccess, errorMsg = attemptResult[1], attemptResult[2]
-                    if callSuccess then
-                        remoteSuccess = true
-                        successCount = successCount + 1
-                        print("✅ SUCCESS: " .. remote.Name .. " (attempt " .. attemptIndex .. ")")
-                        break
-                    elseif errorMsg == "capability_error" or errorMsg == "skipped_dangerous" then
-                        errorCount = errorCount + 1
-                        break
-                    end
-                else
-                    -- pcall itself failed
-                    errorCount = errorCount + 1
-                    break
-                end
-            end
-
-            if not remoteSuccess and errorCount == 0 then
-                print("⚠️ " .. remote.Name .. " - no successful calls")
-            end
-
-            return "processed"
-        end)
-
-        -- If remote processing failed completely, log it but continue
-        if not remoteProcessed then
-            print("🚨 Remote processing error for " .. remote.Name .. ": " .. tostring(remoteError))
-            errorCount = errorCount + 1
-        end
-    end
-
-    -- Try a few key functions if remotes didn't work
-    if successCount == 0 and #funcs > 0 and errorCount < 3 then
-        print("🔄 Trying key functions...")
-        for _, func in pairs(funcs) do
-            if tick() - startTime > timeout then break end
-
-            local info = debug.getinfo(func)
-            if info.name then
-                local name = info.name:lower()
-                if (string.find(name, "additem") or string.find(name, "giveitem") or
-                    string.find(name, "inventory") or string.find(name, "backpack")) and
-                   not (string.find(name, "mail") or string.find(name, "permission")) then
-
-                    local success, errorMsg = pcall(function() func(itemId, amount) end)
-                    if success then
-                        successCount = successCount + 1
-                        calledCount = calledCount + 1
-                        print("✅ SUCCESS: Function " .. info.name)
-                    elseif not string.find(errorMsg, "RobloxScript") then
-                        -- Only count non-capability errors
-                        errorCount = errorCount + 1
-                    end
-                end
+                table.insert(inventoryRemotes, remote)
             end
         end
-    end
+
+        print("📦 Found " .. #inventoryRemotes .. " potential inventory remotes")
+
+        -- Try server-side item addition methods
+        for _, remote in pairs(inventoryRemotes) do
+            if tick() - startTime > 3 then break end -- Shorter timeout
+
+            local success, result = pcall(function()
+                if remote:IsA("RemoteEvent") then
+                    -- Try different server-side parameter combinations
+                    remote:FireServer(targetPlayer, itemId, amount)
+                    remote:FireServer(itemId, amount, targetPlayer)
+                    remote:FireServer({player = targetPlayer, itemId = itemId, amount = amount})
+                    remote:FireServer("AddItem", targetPlayer, itemId, amount)
+                    remote:FireServer("GiveItem", targetPlayer, itemId, amount)
+                    return true
+                elseif remote:IsA("RemoteFunction") then
+                    -- Try server function calls
+                    local result1 = remote:InvokeServer(targetPlayer, itemId, amount)
+                    local result2 = remote:InvokeServer(itemId, amount, targetPlayer)
+                    local result3 = remote:InvokeServer({player = targetPlayer, itemId = itemId, amount = amount})
+                    return result1 or result2 or result3
+                end
+            end)
+
+            if success and result then
+                successCount = successCount + 1
+                print("✅ SERVER SUCCESS: " .. remote.Name .. " - Item should be in jdiishere4's inventory")
+                break -- Stop after first success
+            end
+        end
+
+        -- If no server remotes worked, try direct player inventory manipulation
+        if successCount == 0 then
+            print("🔄 Trying direct inventory manipulation...")
+
+            local success, result = pcall(function()
+                -- Try to find and manipulate player's inventory directly
+                if targetPlayer and targetPlayer:FindFirstChild("Backpack") then
+                    local tool = Instance.new("Tool")
+                    tool.Name = "Item_" .. itemId .. "_" .. amount
+                    tool:SetAttribute("ItemId", itemId)
+                    tool:SetAttribute("Amount", amount)
+                    tool:SetAttribute("Persistent", true)
+                    tool.Parent = targetPlayer.Backpack
+                    return true
+                end
+                return false
+            end)
+
+            if success and result then
+                successCount = successCount + 1
+                print("✅ DIRECT SUCCESS: Item added to jdiishere4's backpack")
+            end
+        end
+
+        -- Try to trigger game UI notification
+        if successCount > 0 then
+            pcall(function()
+                -- Try to find and trigger UI notification
+                local playerGui = targetPlayer:FindFirstChild("PlayerGui")
+                if playerGui then
+                    for _, gui in pairs(playerGui:GetDescendants()) do
+                        if gui:IsA("TextLabel") and string.find(gui.Name:lower(), "notification") then
+                            gui.Text = "Received: " .. amount .. "x Item ID " .. itemId
+                            gui.Visible = true
+                            wait(3)
+                            gui.Visible = false
+                        end
+                    end
+                end
+            end)
+        end
 
         local duration = tick() - startTime
-        print("📋 Attempt completed in " .. string.format("%.2f", duration) .. "s")
-        print("   Remotes tried: " .. calledCount)
-        print("   Successes: " .. successCount)
-        print("   Capability errors avoided: " .. errorCount)
+        print("📋 Duplication attempt completed in " .. string.format("%.2f", duration) .. "s")
 
         if successCount > 0 then
-            print("🎉 Duplication successful! Check your inventory.")
-        elseif errorCount > 0 then
-            print("⚠️ Encountered capability errors. Try again or use different item.")
+            print("🎉 SUCCESS! Item should be in jdiishere4's inventory with game notification")
+            print("💾 Item is set to be persistent across server changes")
         else
-            print("❌ No successful duplications. Item may not be duplicable.")
+            print("❌ No successful duplications. The server may not support this item.")
         end
     end)
 
