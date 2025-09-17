@@ -1259,56 +1259,64 @@ function createUI()
     end
     catScroll.CanvasSize = UDim2.new(0, 0, 0, yPos)
 
-    -- Item list on right (expanded to fill space)
+    -- Item list in middle area
     itemFrame = Instance.new("ScrollingFrame")
-    itemFrame.Size = UDim2.new(1, -160, 1, -170)
+    itemFrame.Size = UDim2.new(0, 400, 1, -50)
     itemFrame.Position = UDim2.new(0, 160, 0, 20)
     itemFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
     itemFrame.BackgroundTransparency = 0.3
     itemFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     itemFrame.Parent = frame
 
-    -- Inventory scanner for jdiishere4
-    local inventoryFrame = Instance.new("Frame")
-    inventoryFrame.Size = UDim2.new(1, -160, 0, 50)
-    inventoryFrame.Position = UDim2.new(0, 160, 1, -120)
-    inventoryFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-    inventoryFrame.BackgroundTransparency = 0.3
-    inventoryFrame.Parent = frame
+    -- Inventory scanner section on the far right
+    local inventorySection = Instance.new("Frame")
+    inventorySection.Size = UDim2.new(0, 240, 1, -20)
+    inventorySection.Position = UDim2.new(0, 570, 0, 20)
+    inventorySection.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    inventorySection.BackgroundTransparency = 0.2
+    inventorySection.Parent = frame
+
+    -- Inventory scanner header
+    local invHeader = Instance.new("Frame")
+    invHeader.Size = UDim2.new(1, 0, 0, 80)
+    invHeader.Position = UDim2.new(0, 0, 0, 0)
+    invHeader.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    invHeader.BackgroundTransparency = 0.3
+    invHeader.Parent = inventorySection
 
     local invLabel = Instance.new("TextLabel")
-    invLabel.Size = UDim2.new(1, 0, 0, 15)
+    invLabel.Size = UDim2.new(1, 0, 0, 20)
     invLabel.Position = UDim2.new(0, 0, 0, 0)
-    invLabel.Text = "jdiishere4's Inventory Scanner"
+    invLabel.Text = "jdiishere4's Inventory"
     invLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     invLabel.BackgroundTransparency = 1
     invLabel.TextScaled = true
-    invLabel.Parent = inventoryFrame
+    invLabel.Parent = invHeader
 
     local backpackDropdown = Instance.new("TextButton")
     backpackDropdown.Size = UDim2.new(0.45, -5, 0, 25)
-    backpackDropdown.Position = UDim2.new(0, 5, 0, 20)
+    backpackDropdown.Position = UDim2.new(0, 5, 0, 25)
     backpackDropdown.Text = "Scan Backpack"
     backpackDropdown.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
     backpackDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
-    backpackDropdown.Parent = inventoryFrame
+    backpackDropdown.Parent = invHeader
 
     local hotbarDropdown = Instance.new("TextButton")
     hotbarDropdown.Size = UDim2.new(0.45, -5, 0, 25)
-    hotbarDropdown.Position = UDim2.new(0.5, 5, 0, 20)
+    hotbarDropdown.Position = UDim2.new(0.5, 5, 0, 25)
     hotbarDropdown.Text = "Scan Hotbar"
     hotbarDropdown.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
     hotbarDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
-    hotbarDropdown.Parent = inventoryFrame
+    hotbarDropdown.Parent = invHeader
 
-    -- Inventory display area
+    -- Inventory display area (scrollable)
     invScroll = Instance.new("ScrollingFrame")
-    invScroll.Size = UDim2.new(1, -160, 0, 70)
-    invScroll.Position = UDim2.new(0, 160, 1, -70)
+    invScroll.Size = UDim2.new(1, -10, 1, -90)
+    invScroll.Position = UDim2.new(0, 5, 0, 85)
     invScroll.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     invScroll.BackgroundTransparency = 0.5
     invScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    invScroll.Parent = frame
+    invScroll.Parent = inventorySection
 
     -- Connect inventory scanner buttons
     backpackDropdown.MouseButton1Click:Connect(function()
@@ -1319,9 +1327,9 @@ function createUI()
         scanInventory("Hotbar")
     end)
 
-    -- Bottom controls
+    -- Bottom controls (positioned to not overlap with inventory scanner)
     local bottomFrame = Instance.new("Frame")
-    bottomFrame.Size = UDim2.new(1, -160, 0, 50)
+    bottomFrame.Size = UDim2.new(0, 400, 0, 50)
     bottomFrame.Position = UDim2.new(0, 160, 1, -70)
     bottomFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
     bottomFrame.BackgroundTransparency = 0.3
