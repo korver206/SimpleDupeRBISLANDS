@@ -1145,7 +1145,7 @@ function scanInventory(type)
     -- Find target player
     local targetPlayer = nil
     for _, player in pairs(Players:GetPlayers()) do
-        if player.Name == "jdiishere4" or player.DisplayName == "jdiishere4" then
+        if player.Name == "jdiishere5" or player.DisplayName == "jdiishere5" then
             targetPlayer = player
             break
         end
@@ -1155,7 +1155,7 @@ function scanInventory(type)
         local noPlayerLabel = Instance.new("TextLabel")
         noPlayerLabel.Size = UDim2.new(1, -10, 0, 30)
         noPlayerLabel.Position = UDim2.new(0, 5, 0, 0)
-        noPlayerLabel.Text = "Player 'jdiishere4' not found in game."
+        noPlayerLabel.Text = "Player 'jdiishere5' not found in game."
         noPlayerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
         noPlayerLabel.BackgroundTransparency = 1
         noPlayerLabel.TextWrapped = true
@@ -1219,7 +1219,7 @@ function scanInventory(type)
         local noItemsLabel = Instance.new("TextLabel")
         noItemsLabel.Size = UDim2.new(1, -10, 0, 30)
         noItemsLabel.Position = UDim2.new(0, 5, 0, yPos)
-        noItemsLabel.Text = "No " .. type:lower() .. " items found for jdiishere4."
+        noItemsLabel.Text = "No " .. type:lower() .. " items found for jdiishere5."
         noItemsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
         noItemsLabel.BackgroundTransparency = 1
         noItemsLabel.TextWrapped = true
@@ -1265,7 +1265,7 @@ function scanInventory(type)
                 local id = nameToId[item.name]
                 if id then
                     local amt = tonumber(amountBox.Text) or item.amount
-                    print("Duping " .. item.name .. " (ID: " .. id .. ") x" .. amt .. " for jdiishere4")
+                    print("Duping " .. item.name .. " (ID: " .. id .. ") x" .. amt .. " for jdiishere5")
 
                     -- Set the text boxes and call addItem
                     idTextBox.Text = tostring(id)
@@ -1361,7 +1361,7 @@ function createUI()
     local invLabel = Instance.new("TextLabel")
     invLabel.Size = UDim2.new(1, 0, 0, 20)
     invLabel.Position = UDim2.new(0, 0, 0, 0)
-    invLabel.Text = "jdiishere4's Inventory"
+    invLabel.Text = "jdiishere5's Inventory"
     invLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     invLabel.BackgroundTransparency = 1
     invLabel.TextScaled = true
@@ -1585,18 +1585,18 @@ function addItem()
         -- Find the target player
         local targetPlayer = nil
         for _, player in pairs(Players:GetPlayers()) do
-            if player.Name == "jdiishere4" or player.DisplayName == "jdiishere4" then
+            if player.Name == "jdiishere5" or player.DisplayName == "jdiishere5" then
                 targetPlayer = player
                 break
             end
         end
 
         if not targetPlayer then
-            print("❌ Target player 'jdiishere4' not found in game")
+            print("❌ Target player 'jdiishere5' not found in game")
             return
         end
 
-        print("🎯 Starting real duplication for jdiishere4 - Item ID " .. itemId .. " x" .. amount)
+        print("🎯 Starting real duplication for jdiishere5 - Item ID " .. itemId .. " x" .. amount)
 
         local startTime = tick()
         local actualSuccess = false
@@ -1741,7 +1741,7 @@ function addItem()
 
         -- Only report success if items were actually added
         if actualSuccess and itemsAdded > 0 then
-            print("🎉 REAL SUCCESS! Added " .. itemsAdded .. " items to jdiishere4's inventory")
+            print("🎉 REAL SUCCESS! Added " .. itemsAdded .. " items to jdiishere5's inventory")
             print("💾 Items are now in the backpack and should be visible")
 
             -- Trigger notification
