@@ -804,6 +804,28 @@ for cat, list in pairs(items) do
     table.sort(list, function(a, b) return a.id < b.id end)
 end
 
+-- Create name to ID lookup
+local nameToId = {}
+for cat, list in pairs(items) do
+    if cat ~= "REMOTES" and cat ~= "FUNCTIONS" then
+        for _, item in pairs(list) do
+            nameToId[item.name] = item.id
+        end
+    end
+end
+
+-- Add REMOTES and FUNCTIONS as special categories
+items["REMOTES"] = {}
+for i, remote in ipairs(remotes) do
+    table.insert(items["REMOTES"], {id = i, name = remote.Name, remote = remote})
+end
+
+items["FUNCTIONS"] = {}
+for i, func in ipairs(funcs) do
+    local info = debug.getinfo(func)
+    table.insert(items["FUNCTIONS"], {id = i, name = info.name or "unknown", func = func})
+end
+
 -- Scan for all remotes
 function scanRemotes()
     local locations = {ReplicatedStorage, game.Workspace, LocalPlayer}
@@ -917,13 +939,20 @@ end
 
 -- Scan inventory
 function scanInventory(type)
-    local items = {}
+    -- Clear previous items
+    for _, child in pairs(invScroll:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+
+    local scannedItems = {}
     if type == "Backpack" then
         for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
             if item:IsA("Tool") then
                 local name = item.Name
                 local amount = 1 -- Assume 1 for tools
-                table.insert(items, name .. " x" .. amount)
+                table.insert(scannedItems, {name = name, amount = amount})
             end
         end
     elseif type == "Hotbar" then
@@ -937,23 +966,91 @@ function scanInventory(type)
                             local item = slot.Item
                             local name = item.Name
                             local amount = item:FindFirstChild("Amount") and item.Amount.Value or 1
-                            table.insert(items, name .. " x" .. amount)
+                            table.insert(scannedItems, {name = name, amount = amount})
                         elseif slot:IsA("Tool") then
-                            table.insert(items, slot.Name .. " x1")
+                            table.insert(scannedItems, {name = slot.Name, amount = 1})
                         end
                     end
                 end
             end
         end
-        if #items == 0 then
-            table.insert(items, "Hotbar not found or empty")
+        if #scannedItems == 0 then
+            table.insert(scannedItems, {name = "Hotbar not found or empty", amount = 0})
         end
     end
 
-    local text = type .. ":\n" .. table.concat(items, "\n")
-    invDisplay.Text = text
-    invDisplay.Size = UDim2.new(1, 0, 0, invDisplay.TextBounds.Y)
-    invScroll.CanvasSize = UDim2.new(0, 0, 0, invDisplay.TextBounds.Y)
+    local yPos = 0
+    for _, item in pairs(scannedItems) do
+        local itemFrame = Instance.new("Frame")
+        itemFrame.Size = UDim2.new(1, -10, 0, 30)
+        itemFrame.Position = UDim2.new(0, 5, 0, yPos)
+        itemFrame.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        itemFrame.BackgroundTransparency = 0.5
+        itemFrame.Parent = invScroll
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(0.5, -5, 1, 0)
+        nameLabel.Position = UDim2.new(0, 0, 0, 0)
+        nameLabel.Text = item.name
+        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.TextWrapped = true
+        nameLabel.Parent = itemFrame
+
+        local amountBox = Instance.new("TextBox")
+        amountBox.Size = UDim2.new(0.2, -5, 1, 0)
+        amountBox.Position = UDim2.new(0.5, 0, 0, 0)
+        amountBox.Text = tostring(item.amount)
+        amountBox.PlaceholderText = "Amount"
+        amountBox.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        amountBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+        amountBox.Parent = itemFrame
+
+        local dupeButton = Instance.new("TextButton")
+        dupeButton.Size = UDim2.new(0.3, -5, 1, 0)
+        dupeButton.Position = UDim2.new(0.7, 0, 0, 0)
+        dupeButton.Text = "Dupe"
+        dupeButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        dupeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        dupeButton.Parent = itemFrame
+
+        dupeButton.MouseButton1Click:Connect(function()
+            local id = nameToId[item.name]
+            if id then
+                local amt = tonumber(amountBox.Text) or item.amount
+                -- Call add logic
+                for _, remote in pairs(remotes) do
+                    local name = remote.Name:lower()
+                    local path = remote:GetFullName():lower()
+                    if string.find(name, "inventory") or string.find(name, "item") or string.find(name, "add") or string.find(name, "give") or string.find(name, "award") or string.find(name, "backpack") or string.find(name, "hotbar") or string.find(path, "inventory") or string.find(path, "item") or string.find(path, "backpack") or string.find(path, "hotbar") then
+                        if remote:IsA("RemoteEvent") then
+                            pcall(function()
+                                remote:FireServer(id, amt)
+                                remote:FireServer({itemId = id, amount = amt})
+                                remote:FireServer("AddItem", id, amt)
+                                remote:FireServer("GiveItem", id, amt)
+                                remote:FireServer(LocalPlayer, id, amt)
+                            end)
+                        elseif remote:IsA("RemoteFunction") then
+                            pcall(function()
+                                remote:InvokeServer(id, amt)
+                                remote:InvokeServer({itemId = id, amount = amt})
+                                remote:InvokeServer("AddItem", id, amt)
+                                remote:InvokeServer("GiveItem", id, amt)
+                                remote:InvokeServer(LocalPlayer, id, amt)
+                            end)
+                        end
+                        print("Duped " .. item.name .. " x" .. amt .. " via " .. remote.Name)
+                    end
+                end
+            else
+                print("ID not found for " .. item.name)
+            end
+        end)
+
+        yPos = yPos + 35
+    end
+    invScroll.CanvasSize = UDim2.new(0, 0, 0, yPos)
 end
 
 -- Create UI with item browser
@@ -962,8 +1059,8 @@ function createUI()
     screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
     frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 600, 0, 500)
-    frame.Position = UDim2.new(0.5, -300, 0.5, -200)
+    frame.Size = UDim2.new(0, 600, 0, 600)
+    frame.Position = UDim2.new(0.5, -300, 0.5, -250)
     frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     frame.BackgroundTransparency = 0.5
     frame.Parent = screenGui
@@ -1008,7 +1105,7 @@ function createUI()
 
     -- Item list on right
     itemFrame = Instance.new("ScrollingFrame")
-    itemFrame.Size = UDim2.new(1, -160, 1, -70)
+    itemFrame.Size = UDim2.new(1, -160, 1, -170)
     itemFrame.Position = UDim2.new(0, 160, 0, 20)
     itemFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
     itemFrame.BackgroundTransparency = 0.3
@@ -1017,8 +1114,8 @@ function createUI()
 
     -- Inventory display section
     local inventoryFrame = Instance.new("Frame")
-    inventoryFrame.Size = UDim2.new(1, -160, 0, 120)
-    inventoryFrame.Position = UDim2.new(0, 160, 0, 350)
+    inventoryFrame.Size = UDim2.new(1, -160, 0, 90)
+    inventoryFrame.Position = UDim2.new(0, 160, 0, 450)
     inventoryFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
     inventoryFrame.BackgroundTransparency = 0.3
     inventoryFrame.Parent = frame
@@ -1056,23 +1153,14 @@ function createUI()
     refreshInvButton.Parent = inventoryFrame
 
     local invScroll = Instance.new("ScrollingFrame")
-    invScroll.Size = UDim2.new(1, -10, 0, 60)
+    invScroll.Size = UDim2.new(1, -10, 0, 55)
     invScroll.Position = UDim2.new(0, 5, 0, 55)
     invScroll.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     invScroll.BackgroundTransparency = 0.5
     invScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     invScroll.Parent = inventoryFrame
 
-    invDisplay = Instance.new("TextLabel")
-    invDisplay.Size = UDim2.new(1, 0, 0, 0)
-    invDisplay.Position = UDim2.new(0, 0, 0, 0)
-    invDisplay.Text = "Click to scan inventory"
-    invDisplay.TextColor3 = Color3.fromRGB(255, 255, 255)
-    invDisplay.BackgroundTransparency = 1
-    invDisplay.TextWrapped = true
-    invDisplay.TextXAlignment = Enum.TextXAlignment.Left
-    invDisplay.TextYAlignment = Enum.TextYAlignment.Top
-    invDisplay.Parent = invScroll
+    -- invDisplay removed, using dynamic frames
 
     backpackDropdown.MouseButton1Click:Connect(function()
         scanInventory("Backpack")
@@ -1158,12 +1246,50 @@ function showCategory(cat)
         local itemButton = Instance.new("TextButton")
         itemButton.Size = UDim2.new(1, -10, 0, 20)
         itemButton.Position = UDim2.new(0, 5, 0, yPos)
-        itemButton.Text = item.name .. " (" .. item.id .. ")"
+        if cat == "REMOTES" or cat == "FUNCTIONS" then
+            itemButton.Text = item.name
+        else
+            itemButton.Text = item.name .. " (" .. item.id .. ")"
+        end
         itemButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
         itemButton.TextColor3 = Color3.fromRGB(255, 255, 255)
         itemButton.Parent = itemFrame
         itemButton.MouseButton1Click:Connect(function()
-            idTextBox.Text = tostring(item.id)
+            if cat == "REMOTES" then
+                local itemId = tonumber(idTextBox.Text)
+                local amount = tonumber(amountTextBox.Text)
+                if item.remote:IsA("RemoteEvent") then
+                    pcall(function()
+                        if itemId and amount then
+                            item.remote:FireServer(itemId, amount)
+                        else
+                            item.remote:FireServer()
+                        end
+                    end)
+                elseif item.remote:IsA("RemoteFunction") then
+                    pcall(function()
+                        if itemId and amount then
+                            item.remote:InvokeServer(itemId, amount)
+                        else
+                            item.remote:InvokeServer()
+                        end
+                    end)
+                end
+                print("Called remote: " .. item.name)
+            elseif cat == "FUNCTIONS" then
+                local itemId = tonumber(idTextBox.Text)
+                local amount = tonumber(amountTextBox.Text)
+                pcall(function()
+                    if itemId and amount then
+                        item.func(itemId, amount)
+                    else
+                        item.func()
+                    end
+                end)
+                print("Called function: " .. item.name)
+            else
+                idTextBox.Text = tostring(item.id)
+            end
         end)
         yPos = yPos + 25
     end
