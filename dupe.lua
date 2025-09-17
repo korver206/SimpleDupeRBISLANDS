@@ -1400,30 +1400,23 @@ function createUI()
     addButton.MouseButton1Click:Connect(function()
         if addButton.Text == "Working..." then return end -- Prevent spam clicking
 
-        statusLabel.Text = "Initializing..."
+        statusLabel.Text = "Starting..."
         statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
         addButton.Text = "Working..."
         addButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
 
         task.spawn(function()
-            local startTime = tick()
-            statusLabel.Text = "Scanning methods..."
-            task.wait(0.1)
+            statusLabel.Text = "Processing..."
+            task.wait(0.05) -- Very brief wait for UI update
 
             addItem()
 
-            local duration = tick() - startTime
-            if duration < 1 then
-                statusLabel.Text = "Quick attempt completed"
-            else
-                statusLabel.Text = "Attempt completed (" .. string.format("%.1f", duration) .. "s)"
-            end
-
+            statusLabel.Text = "Completed"
             statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
             addButton.Text = "Add Item"
             addButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
 
-            task.wait(3)
+            task.wait(2)
             statusLabel.Text = "Ready"
             statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
         end)
@@ -1513,7 +1506,7 @@ function showCategory(cat)
     itemFrame.CanvasSize = UDim2.new(0, 0, 0, yPos)
 end
 
--- Add item function with timeout and better error handling
+-- Add item function with robust error handling and focused approach
 function addItem()
     local itemId = tonumber(idTextBox.Text)
     local amount = tonumber(amountTextBox.Text)
@@ -1523,16 +1516,75 @@ function addItem()
     end
 
     print("🎯 Starting duplication attempt for item ID " .. itemId .. " x" .. amount)
-    print("📊 Total remotes available: " .. #remotes)
-    print("🔧 Total functions available: " .. #funcs)
 
     local startTime = tick()
-    local timeout = 10 -- 10 second timeout
+    local timeout = 5 -- Reduced timeout for faster feedback
     local calledCount = 0
     local successCount = 0
+    local errorCount = 0
 
-    -- Try priority remotes first (more likely to work)
-    print("🔍 Trying priority remotes...")
+    -- Define safe remote patterns (avoid problematic ones)
+    local safePatterns = {
+        "inventory",
+        "item",
+        "additem",
+        "giveitem",
+        "backpack",
+        "hotbar",
+        "player.*item",
+        "craft",
+        "shop",
+        "merchant"
+    }
+
+    -- Define patterns to avoid (cause RobloxScript errors)
+    local avoidPatterns = {
+        "mailbox",
+        "mute",
+        "unmute",
+        "permission",
+        "agreement",
+        "treasure",
+        "fossil",
+        "login",
+        "invite",
+        "lobby",
+        "init",
+        "icon",
+        "jukebox",
+        "filter",
+        "perk",
+        "dig",
+        "replicate",
+        "connect"
+    }
+
+    -- Helper function for safe remote calling
+    local function safeCall(remote, ...)
+        local args = {...}
+        local success, result = pcall(function()
+            if remote:IsA("RemoteEvent") then
+                return remote:FireServer(unpack(args))
+            elseif remote:IsA("RemoteFunction") then
+                return remote:InvokeServer(unpack(args))
+            end
+        end)
+
+        if success then
+            return true, result
+        else
+            -- Check if it's a RobloxScript capability error
+            if string.find(result, "RobloxScript") or string.find(result, "capability") then
+                return false, "capability_error"
+            else
+                return false, result
+            end
+        end
+    end
+
+    print("🔍 Scanning for safe remotes...")
+
+    -- Try only safe, relevant remotes
     for _, remote in pairs(remotes) do
         if tick() - startTime > timeout then
             print("⏰ Timeout reached, stopping attempt")
@@ -1542,115 +1594,102 @@ function addItem()
         local name = remote.Name:lower()
         local path = remote:GetFullName():lower()
 
-        -- Priority filtering - most likely to contain item functions
-        local isPriority = string.find(name, "inventory") or string.find(name, "item") or
-                          string.find(name, "add") or string.find(name, "give") or
-                          string.find(name, "backpack") or string.find(name, "hotbar") or
-                          string.find(name, "player") or string.find(name, "data")
+        -- Check if this remote should be avoided
+        local shouldAvoid = false
+        for _, pattern in ipairs(avoidPatterns) do
+            if string.find(name, pattern) or string.find(path, pattern) then
+                shouldAvoid = true
+                break
+            end
+        end
 
-        if isPriority then
-            if remote:IsA("RemoteEvent") then
-                local results = {}
-                results[1] = pcall(function() remote:FireServer(itemId, amount) end)
-                results[2] = pcall(function() remote:FireServer({itemId = itemId, amount = amount}) end)
-                results[3] = pcall(function() remote:FireServer("AddItem", itemId, amount) end)
-                results[4] = pcall(function() remote:FireServer("GiveItem", itemId, amount) end)
+        if shouldAvoid then
+            -- Skip problematic remotes
+            continue
+        end
 
-                local anySuccess = false
-                for i, success in ipairs(results) do
-                    if success then
-                        anySuccess = true
-                        successCount = successCount + 1
-                        break
-                    end
+        -- Check if this remote matches safe patterns
+        local isSafe = false
+        for _, pattern in ipairs(safePatterns) do
+            if string.find(name, pattern) or string.find(path, pattern) then
+                isSafe = true
+                break
+            end
+        end
+
+        if isSafe then
+            calledCount = calledCount + 1
+
+            -- Try different parameter combinations
+            local attempts = {
+                {itemId, amount},
+                {{itemId = itemId, amount = amount}},
+                {"AddItem", itemId, amount},
+                {"GiveItem", itemId, amount},
+                {LocalPlayer, itemId, amount}
+            }
+
+            local remoteSuccess = false
+            for _, params in ipairs(attempts) do
+                local success, errorMsg = safeCall(remote, unpack(params))
+                if success then
+                    remoteSuccess = true
+                    successCount = successCount + 1
+                    print("✅ SUCCESS: " .. remote.Name .. " (" .. table.concat(params, ", ") .. ")")
+                    break
+                elseif errorMsg == "capability_error" then
+                    errorCount = errorCount + 1
+                    -- Don't print capability errors to reduce spam
+                    break
                 end
+            end
 
-                if anySuccess then
-                    print("✅ SUCCESS: RemoteEvent " .. remote.Name .. " responded positively")
-                    calledCount = calledCount + 1
-                end
-
-            elseif remote:IsA("RemoteFunction") then
-                local results = {}
-                results[1] = pcall(function() remote:InvokeServer(itemId, amount) end)
-                results[2] = pcall(function() remote:InvokeServer({itemId = itemId, amount = amount}) end)
-                results[3] = pcall(function() remote:InvokeServer("AddItem", itemId, amount) end)
-                results[4] = pcall(function() remote:InvokeServer("GiveItem", itemId, amount) end)
-
-                local anySuccess = false
-                for i, success in ipairs(results) do
-                    if success then
-                        anySuccess = true
-                        successCount = successCount + 1
-                        break
-                    end
-                end
-
-                if anySuccess then
-                    print("✅ SUCCESS: RemoteFunction " .. remote.Name .. " responded positively")
-                    calledCount = calledCount + 1
-                end
+            if not remoteSuccess and errorCount == 0 then
+                -- Only print if not a capability error
+                print("⚠️ " .. remote.Name .. " - no successful calls")
             end
         end
     end
 
-    -- Try functions if remotes didn't work
-    if successCount == 0 and #funcs > 0 then
-        print("🔄 No remote success, trying functions...")
+    -- Try a few key functions if remotes didn't work
+    if successCount == 0 and #funcs > 0 and errorCount < 3 then
+        print("🔄 Trying key functions...")
         for _, func in pairs(funcs) do
-            if tick() - startTime > timeout then
-                print("⏰ Timeout reached, stopping function attempts")
-                break
-            end
+            if tick() - startTime > timeout then break end
 
             local info = debug.getinfo(func)
             if info.name then
                 local name = info.name:lower()
-                if string.find(name, "add") or string.find(name, "give") or string.find(name, "item") or string.find(name, "inventory") then
-                    local success1 = pcall(function() func(itemId, amount) end)
-                    local success2 = pcall(function() func({itemId = itemId, amount = amount}) end)
-                    local success3 = pcall(function() func("AddItem", itemId, amount) end)
-                    local success4 = pcall(function() func("GiveItem", itemId, amount) end)
+                if (string.find(name, "additem") or string.find(name, "giveitem") or
+                    string.find(name, "inventory") or string.find(name, "backpack")) and
+                   not (string.find(name, "mail") or string.find(name, "permission")) then
 
-                    if success1 or success2 or success3 or success4 then
-                        print("✅ SUCCESS: Function " .. info.name .. " executed successfully")
+                    local success, errorMsg = pcall(function() func(itemId, amount) end)
+                    if success then
                         successCount = successCount + 1
                         calledCount = calledCount + 1
+                        print("✅ SUCCESS: Function " .. info.name)
+                    elseif not string.find(errorMsg, "RobloxScript") then
+                        -- Only count non-capability errors
+                        errorCount = errorCount + 1
                     end
                 end
             end
         end
     end
 
-    -- Final fallback - try a few random remotes
-    if successCount == 0 and #remotes > 0 then
-        print("🔄 Final fallback - trying random remotes...")
-        local tried = 0
-        for i = 1, math.min(5, #remotes) do -- Try up to 5 random remotes
-            if tick() - startTime > timeout then break end
-
-            local remote = remotes[math.random(1, #remotes)]
-            if remote:IsA("RemoteEvent") then
-                pcall(function() remote:FireServer(itemId, amount) end)
-                tried = tried + 1
-            elseif remote:IsA("RemoteFunction") then
-                pcall(function() remote:InvokeServer(itemId, amount) end)
-                tried = tried + 1
-            end
-        end
-        print("🎲 Tried " .. tried .. " random remotes as final attempt")
-    end
-
     local duration = tick() - startTime
-    print("📋 Duplication attempt completed in " .. string.format("%.2f", duration) .. " seconds")
-    print("   Methods attempted: " .. calledCount)
-    print("   Successful calls: " .. successCount)
+    print("📋 Attempt completed in " .. string.format("%.2f", duration) .. "s")
+    print("   Remotes tried: " .. calledCount)
+    print("   Successes: " .. successCount)
+    print("   Capability errors avoided: " .. errorCount)
 
     if successCount > 0 then
-        print("🎉 Some methods succeeded! Check your inventory for new items.")
+        print("🎉 Duplication successful! Check your inventory.")
+    elseif errorCount > 0 then
+        print("⚠️ Encountered capability errors. Try again or use different item.")
     else
-        print("⚠️ No methods succeeded. The game may have updated or this item may not be duplicable.")
-        print("💡 Try different item IDs or check the console for more details.")
+        print("❌ No successful duplications. Item may not be duplicable.")
     end
 end
 
