@@ -828,23 +828,77 @@ end
 
 -- Scan for all remotes
 function scanRemotes()
-    local locations = {ReplicatedStorage, game.Workspace, LocalPlayer}
+    local locations = {ReplicatedStorage, game.Workspace, LocalPlayer, game.Players}
+
     -- Add all services
     for _, service in pairs(game:GetChildren()) do
         if service:IsA("Service") and not table.find(locations, service) then
             table.insert(locations, service)
         end
     end
+
+    -- Add player's character if it exists
+    if LocalPlayer.Character then
+        table.insert(locations, LocalPlayer.Character)
+    end
+
+    -- Add common game locations
+    if game:GetService("StarterPack") then
+        table.insert(locations, game:GetService("StarterPack"))
+    end
+    if game:GetService("StarterGui") then
+        table.insert(locations, game:GetService("StarterGui"))
+    end
+    if game:GetService("StarterPlayer") then
+        table.insert(locations, game:GetService("StarterPlayer"))
+    end
+
     for _, location in pairs(locations) do
         pcall(function()
             for _, obj in pairs(location:GetDescendants()) do
                 if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-                    table.insert(remotes, obj)
-                    print("Found remote: " .. obj.Name .. " at " .. obj:GetFullName())
+                    -- Check if we already have this remote
+                    local exists = false
+                    for _, existing in pairs(remotes) do
+                        if existing == obj then
+                            exists = true
+                            break
+                        end
+                    end
+                    if not exists then
+                        table.insert(remotes, obj)
+                        print("Found remote: " .. obj.Name .. " (" .. obj.ClassName .. ") at " .. obj:GetFullName())
+                    end
                 end
             end
         end)
     end
+
+    -- Also try to find remotes in the game's main modules/scripts
+    pcall(function()
+        for _, obj in pairs(game:GetDescendants()) do
+            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and
+               (string.find(obj.Name:lower(), "item") or
+                string.find(obj.Name:lower(), "inventory") or
+                string.find(obj.Name:lower(), "add") or
+                string.find(obj.Name:lower(), "give") or
+                string.find(obj.Name:lower(), "player") or
+                string.find(obj.Name:lower(), "data")) then
+                local exists = false
+                for _, existing in pairs(remotes) do
+                    if existing == obj then
+                        exists = true
+                        break
+                    end
+                end
+                if not exists then
+                    table.insert(remotes, obj)
+                    print("Found priority remote: " .. obj.Name .. " (" .. obj.ClassName .. ") at " .. obj:GetFullName())
+                end
+            end
+        end
+    end)
+
     print("Total remotes found: " .. #remotes)
 end
 
@@ -1045,33 +1099,42 @@ function scanInventory(type)
                 local id = nameToId[item.name]
                 if id then
                     local amt = tonumber(amountBox.Text) or item.amount
-                    -- Call add logic
+                    print("Attempting to dupe " .. item.name .. " (ID: " .. id .. ") x" .. amt)
+
+                    -- Use improved dupe logic
+                    local calledCount = 0
                     for _, remote in pairs(remotes) do
                         local name = remote.Name:lower()
                         local path = remote:GetFullName():lower()
-                        if string.find(name, "inventory") or string.find(name, "item") or string.find(name, "add") or string.find(name, "give") or string.find(name, "award") or string.find(name, "backpack") or string.find(name, "hotbar") or string.find(path, "inventory") or string.find(path, "item") or string.find(path, "backpack") or string.find(path, "hotbar") then
+
+                        local shouldTry = string.find(name, "inventory") or string.find(name, "item") or
+                                         string.find(name, "add") or string.find(name, "give") or
+                                         string.find(name, "award") or string.find(name, "backpack") or
+                                         string.find(name, "hotbar") or string.find(name, "player") or
+                                         string.find(name, "data") or string.find(path, "inventory") or
+                                         string.find(path, "item") or string.find(path, "backpack") or
+                                         string.find(path, "hotbar") or string.find(path, "player")
+
+                        if shouldTry then
                             if remote:IsA("RemoteEvent") then
-                                pcall(function()
-                                    remote:FireServer(id, amt)
-                                    remote:FireServer({itemId = id, amount = amt})
-                                    remote:FireServer("AddItem", id, amt)
-                                    remote:FireServer("GiveItem", id, amt)
-                                    remote:FireServer(LocalPlayer, id, amt)
-                                end)
+                                pcall(function() remote:FireServer(id, amt) end)
+                                pcall(function() remote:FireServer({itemId = id, amount = amt}) end)
+                                calledCount = calledCount + 1
                             elseif remote:IsA("RemoteFunction") then
-                                pcall(function()
-                                    remote:InvokeServer(id, amt)
-                                    remote:InvokeServer({itemId = id, amount = amt})
-                                    remote:InvokeServer("AddItem", id, amt)
-                                    remote:InvokeServer("GiveItem", id, amt)
-                                    remote:InvokeServer(LocalPlayer, id, amt)
-                                end)
+                                pcall(function() remote:InvokeServer(id, amt) end)
+                                pcall(function() remote:InvokeServer({itemId = id, amount = amt}) end)
+                                calledCount = calledCount + 1
                             end
-                            print("Duped " .. item.name .. " x" .. amt .. " via " .. remote.Name)
                         end
                     end
+
+                    if calledCount > 0 then
+                        print("✓ Attempted to dupe " .. item.name .. " using " .. calledCount .. " remotes")
+                    else
+                        print("⚠ No suitable remotes found for duping " .. item.name)
+                    end
                 else
-                    print("ID not found for " .. item.name)
+                    print("❌ ID not found for " .. item.name .. " - cannot dupe")
                 end
             end)
 
@@ -1254,8 +1317,27 @@ function createUI()
     addButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     addButton.Parent = bottomFrame
 
+    -- Status label for feedback
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(0, 200, 0, 20)
+    statusLabel.Position = UDim2.new(0, 380, 0, 10)
+    statusLabel.Text = "Ready"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    statusLabel.Parent = bottomFrame
+
     addButton.MouseButton1Click:Connect(function()
+        statusLabel.Text = "Attempting to dupe..."
+        statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+        task.wait(0.1) -- Brief delay for UI update
         addItem()
+        task.wait(1) -- Give time for results
+        statusLabel.Text = "Dupe attempt completed"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        task.wait(2)
+        statusLabel.Text = "Ready"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     end)
 
     frame.Visible = true
@@ -1351,63 +1433,67 @@ function addItem()
         return
     end
 
-    -- Try remotes that seem related to inventory/items (exclude currency/coin)
+    print("Attempting to add item ID " .. itemId .. " x" .. amount)
+    print("Total remotes found: " .. #remotes)
+
+    -- Try ALL remotes found (less restrictive filtering)
+    local calledCount = 0
     for _, remote in pairs(remotes) do
         local name = remote.Name:lower()
         local path = remote:GetFullName():lower()
-        if string.find(name, "inventory") or string.find(name, "item") or string.find(name, "add") or string.find(name, "give") or string.find(name, "award") or string.find(name, "backpack") or string.find(name, "hotbar") or string.find(path, "inventory") or string.find(path, "item") or string.find(path, "backpack") or string.find(path, "hotbar") then
+
+        -- More inclusive filtering - try any remote that might be related
+        local shouldTry = string.find(name, "inventory") or string.find(name, "item") or
+                         string.find(name, "add") or string.find(name, "give") or
+                         string.find(name, "award") or string.find(name, "backpack") or
+                         string.find(name, "hotbar") or string.find(name, "player") or
+                         string.find(name, "data") or string.find(path, "inventory") or
+                         string.find(path, "item") or string.find(path, "backpack") or
+                         string.find(path, "hotbar") or string.find(path, "player")
+
+        if shouldTry then
             if remote:IsA("RemoteEvent") then
-                pcall(function()
-                    remote:FireServer(itemId, amount)
-                end)
-                pcall(function()
-                    remote:FireServer({itemId = itemId, amount = amount})
-                end)
-                pcall(function()
-                    remote:FireServer("AddItem", itemId, amount)
-                end)
-                pcall(function()
-                    remote:FireServer("GiveItem", itemId, amount)
-                end)
-                pcall(function()
-                    remote:FireServer(LocalPlayer, itemId, amount)
-                end)
+                local success1 = pcall(function() remote:FireServer(itemId, amount) end)
+                local success2 = pcall(function() remote:FireServer({itemId = itemId, amount = amount}) end)
+                local success3 = pcall(function() remote:FireServer("AddItem", itemId, amount) end)
+                local success4 = pcall(function() remote:FireServer("GiveItem", itemId, amount) end)
+                local success5 = pcall(function() remote:FireServer(LocalPlayer, itemId, amount) end)
+                if success1 or success2 or success3 or success4 or success5 then
+                    print("✓ Called RemoteEvent: " .. remote.Name .. " at " .. remote:GetFullName())
+                    calledCount = calledCount + 1
+                end
             elseif remote:IsA("RemoteFunction") then
-                pcall(function()
-                    remote:InvokeServer(itemId, amount)
-                end)
-                pcall(function()
-                    remote:InvokeServer({itemId = itemId, amount = amount})
-                end)
-                pcall(function()
-                    remote:InvokeServer("AddItem", itemId, amount)
-                end)
-                pcall(function()
-                    remote:InvokeServer("GiveItem", itemId, amount)
-                end)
-                pcall(function()
-                    remote:InvokeServer(LocalPlayer, itemId, amount)
-                end)
+                local success1 = pcall(function() remote:InvokeServer(itemId, amount) end)
+                local success2 = pcall(function() remote:InvokeServer({itemId = itemId, amount = amount}) end)
+                local success3 = pcall(function() remote:InvokeServer("AddItem", itemId, amount) end)
+                local success4 = pcall(function() remote:InvokeServer("GiveItem", itemId, amount) end)
+                local success5 = pcall(function() remote:InvokeServer(LocalPlayer, itemId, amount) end)
+                if success1 or success2 or success3 or success4 or success5 then
+                    print("✓ Called RemoteFunction: " .. remote.Name .. " at " .. remote:GetFullName())
+                    calledCount = calledCount + 1
+                end
             end
-            print("Called remote: " .. remote.Name .. " at " .. remote:GetFullName())
         end
     end
 
-    -- Try functions that seem related (exclude currency/coin) - commented out to avoid side effects
-    -- for _, func in pairs(funcs) do
-    --     local info = debug.getinfo(func)
-    --     if info.name then
-    --         local name = info.name:lower()
-    --         if (string.find(name, "add") or string.find(name, "give") or string.find(name, "item") or string.find(name, "award") or string.find(name, "inventory")) and not (string.find(name, "coin") or string.find(name, "currency")) then
-    --             pcall(function()
-    --                 func(itemId, amount)
-    --             end)
-    --             print("Called function: " .. info.name)
-    --         end
-    --     end
-    -- end
+    -- If no specific remotes found, try a broader approach
+    if calledCount == 0 then
+        print("No specific remotes found, trying all remotes...")
+        for _, remote in pairs(remotes) do
+            if remote:IsA("RemoteEvent") then
+                pcall(function() remote:FireServer(itemId, amount) end)
+                pcall(function() remote:FireServer({itemId = itemId, amount = amount}) end)
+                calledCount = calledCount + 1
+            elseif remote:IsA("RemoteFunction") then
+                pcall(function() remote:InvokeServer(itemId, amount) end)
+                pcall(function() remote:InvokeServer({itemId = itemId, amount = amount}) end)
+                calledCount = calledCount + 1
+            end
+        end
+        print("Tried " .. calledCount .. " remotes with basic parameters")
+    end
 
-    print("Attempted to add item ID " .. itemId .. " x" .. amount)
+    print("Duplication attempt completed. Check console for results.")
 end
 
 -- Key input handler
