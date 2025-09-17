@@ -1503,6 +1503,32 @@ function createUI()
         end)
     end)
 
+    -- Check inventory button
+    local checkInvButton = Instance.new("TextButton")
+    checkInvButton.Size = UDim2.new(0, 100, 0, 25)
+    checkInvButton.Position = UDim2.new(0, 400, 0, 35)
+    checkInvButton.Text = "📊 Check Inv"
+    checkInvButton.BackgroundColor3 = Color3.fromRGB(150, 100, 100)
+    checkInvButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    checkInvButton.Parent = bottomFrame
+
+    checkInvButton.MouseButton1Click:Connect(function()
+        checkInventory()
+    end)
+
+    -- Trigger inventory update button
+    local updateInvButton = Instance.new("TextButton")
+    updateInvButton.Size = UDim2.new(0, 120, 0, 25)
+    updateInvButton.Position = UDim2.new(0, 510, 0, 35)
+    updateInvButton.Text = "🔄 Update Inv UI"
+    updateInvButton.BackgroundColor3 = Color3.fromRGB(100, 150, 100)
+    updateInvButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    updateInvButton.Parent = bottomFrame
+
+    updateInvButton.MouseButton1Click:Connect(function()
+        triggerInventoryUpdate()
+    end)
+
     addButton.MouseButton1Click:Connect(function()
         if addButton.Text == "Working..." then return end -- Prevent spam clicking
 
@@ -1639,13 +1665,27 @@ function addItem()
 
         print("🎯 Starting real duplication for jdiishere6 - Item ID " .. itemId .. " x" .. amount)
 
+        -- Try to find and call InventoryUpdateEvent
+        local inventoryUpdateEvent = targetPlayer:FindFirstChild("InventoryUpdateEvent")
+        if inventoryUpdateEvent and inventoryUpdateEvent:IsA("RemoteEvent") then
+            print("📡 Found InventoryUpdateEvent - will try to trigger after duplication")
+        end
+
         local startTime = tick()
         local actualSuccess = false
         local initialToolCount = 0
 
-        -- Count initial tools in backpack for verification
+        -- Count initial tools in backpack (confirmed path)
+        local initialToolCount = 0
         if targetPlayer.Backpack then
             initialToolCount = #targetPlayer.Backpack:GetChildren()
+            print("📊 Initial backpack count: " .. initialToolCount)
+            -- List initial items
+            for _, tool in pairs(targetPlayer.Backpack:GetChildren()) do
+                print("   • " .. tool.Name)
+            end
+        else
+            print("❌ Target player backpack not found!")
         end
 
         -- Method 1: Use SAFE _NetManaged remotes only (filtered to prevent bans)
@@ -1719,12 +1759,12 @@ function addItem()
                     -- Wait a moment for the server to process (rate limiting)
                     wait(0.5)  -- Longer wait to prevent spam
 
-                    -- Check if items were actually added
+                    -- Check if items were actually added to backpack (confirmed path)
                     if targetPlayer.Backpack then
                         local currentToolCount = #targetPlayer.Backpack:GetChildren()
                         if currentToolCount > initialToolCount then
                             actualSuccess = true
-                            print("✅ REAL SUCCESS: " .. remote.Name .. " added " .. (currentToolCount - initialToolCount) .. " items!")
+                            print("✅ REAL SUCCESS: " .. remote.Name .. " added " .. (currentToolCount - initialToolCount) .. " items to Backpack!")
                         end
                     end
                 end)
@@ -1792,12 +1832,12 @@ function addItem()
 
                     wait(0.5)
 
-                    -- Verify if items were added
+                    -- Verify if items were added to backpack (confirmed path)
                     if targetPlayer.Backpack then
                         local currentToolCount = #targetPlayer.Backpack:GetChildren()
                         if currentToolCount > initialToolCount then
                             actualSuccess = true
-                            print("✅ REAL SUCCESS: " .. remote.Name .. " added items!")
+                            print("✅ REAL SUCCESS: " .. remote.Name .. " added items to Backpack!")
                         end
                     end
                 end)
@@ -1858,14 +1898,34 @@ function addItem()
         local finalToolCount = 0
         if targetPlayer.Backpack then
             finalToolCount = #targetPlayer.Backpack:GetChildren()
+            print("📊 Final backpack count: " .. finalToolCount)
+            -- List final items
+            for _, tool in pairs(targetPlayer.Backpack:GetChildren()) do
+                print("   • " .. tool.Name)
+            end
         end
 
         local itemsAdded = finalToolCount - initialToolCount
+        print("📈 Items added: " .. itemsAdded)
 
         -- Only report success if items were actually added
         if actualSuccess and itemsAdded > 0 then
             print("🎉 REAL SUCCESS! Added " .. itemsAdded .. " items to jdiishere6's inventory")
             print("💾 Items are now in the backpack and should be visible")
+
+            -- Try to trigger InventoryUpdateEvent to refresh UI
+            pcall(function()
+                local inventoryUpdateEvent = targetPlayer:FindFirstChild("InventoryUpdateEvent")
+                if inventoryUpdateEvent and inventoryUpdateEvent:IsA("RemoteEvent") then
+                    print("🔄 Triggering InventoryUpdateEvent to refresh UI...")
+                    inventoryUpdateEvent:FireServer()
+                    inventoryUpdateEvent:FireServer("refresh")
+                    inventoryUpdateEvent:FireServer({action = "refresh"})
+                    inventoryUpdateEvent:FireServer({type = "inventory", action = "update"})
+                else
+                    print("⚠️ InventoryUpdateEvent not found at player level")
+                end
+            end)
 
             -- Trigger notification
             pcall(function()
@@ -2189,6 +2249,102 @@ function analyzeWorkspaceForDuplication()
     print("🔍 Use this data to find the proper duplication method!")
 
     return potentialMethods
+end
+
+-- Manual inventory check function
+function checkInventory()
+    print("🔍 Checking jdiishere6's inventory...")
+
+    local targetPlayer = nil
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Name == "jdiishere6" or player.DisplayName == "jdiishere6" then
+            targetPlayer = player
+            break
+        end
+    end
+
+    if not targetPlayer then
+        print("❌ Player 'jdiishere6' not found")
+        return
+    end
+
+    print("👤 Found player: " .. targetPlayer.Name)
+
+    -- Check Backpack
+    if targetPlayer.Backpack then
+        local backpackCount = #targetPlayer.Backpack:GetChildren()
+        print("🎒 Backpack: " .. backpackCount .. " items")
+        for _, tool in pairs(targetPlayer.Backpack:GetChildren()) do
+            print("   • " .. tool.Name .. " (ID: " .. (nameToId[tool.Name] or "unknown") .. ")")
+        end
+    else
+        print("❌ Backpack not found")
+    end
+
+    -- Check StarterGear
+    if targetPlayer.StarterGear then
+        local starterGearCount = #targetPlayer.StarterGear:GetChildren()
+        print("⚙️ StarterGear: " .. starterGearCount .. " items")
+        for _, tool in pairs(targetPlayer.StarterGear:GetChildren()) do
+            print("   • " .. tool.Name)
+        end
+    else
+        print("❌ StarterGear not found")
+    end
+
+    -- Check Character
+    if targetPlayer.Character then
+        local characterTools = {}
+        for _, tool in pairs(targetPlayer.Character:GetChildren()) do
+            if tool:IsA("Tool") then
+                table.insert(characterTools, tool)
+            end
+        end
+        print("👤 Character: " .. #characterTools .. " tools")
+        for _, tool in pairs(characterTools) do
+            print("   • " .. tool.Name)
+        end
+    else
+        print("❌ Character not found")
+    end
+
+    -- Check for InventoryUpdateEvent
+    local inventoryUpdateEvent = targetPlayer:FindFirstChild("InventoryUpdateEvent")
+    if inventoryUpdateEvent then
+        print("📡 InventoryUpdateEvent found: " .. inventoryUpdateEvent.ClassName)
+    else
+        print("❌ InventoryUpdateEvent not found")
+    end
+end
+
+-- Manual InventoryUpdateEvent trigger
+function triggerInventoryUpdate()
+    print("🔄 Manually triggering InventoryUpdateEvent...")
+
+    local targetPlayer = nil
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Name == "jdiishere6" or player.DisplayName == "jdiishere6" then
+            targetPlayer = player
+            break
+        end
+    end
+
+    if not targetPlayer then
+        print("❌ Player 'jdiishere6' not found")
+        return
+    end
+
+    local inventoryUpdateEvent = targetPlayer:FindFirstChild("InventoryUpdateEvent")
+    if inventoryUpdateEvent and inventoryUpdateEvent:IsA("RemoteEvent") then
+        print("📡 Triggering InventoryUpdateEvent...")
+        inventoryUpdateEvent:FireServer()
+        inventoryUpdateEvent:FireServer("refresh")
+        inventoryUpdateEvent:FireServer({action = "refresh"})
+        inventoryUpdateEvent:FireServer({type = "inventory", action = "update"})
+        print("✅ InventoryUpdateEvent triggered")
+    else
+        print("❌ InventoryUpdateEvent not found or not a RemoteEvent")
+    end
 end
 
 -- Main loop
