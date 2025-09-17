@@ -826,101 +826,83 @@ for i, func in ipairs(funcs) do
     table.insert(items["FUNCTIONS"], {id = i, name = info.name or "unknown", func = func})
 end
 
--- Scan for all remotes
+-- Scan for all remotes with focus on working item remotes
 function scanRemotes()
     print("🔍 Scanning for remotes...")
 
-    local locations = {ReplicatedStorage, game.Workspace, LocalPlayer, game.Players}
-
-    -- Add all services
-    for _, service in pairs(game:GetChildren()) do
-        if service:IsA("Service") and not table.find(locations, service) then
-            table.insert(locations, service)
-        end
-    end
-
-    -- Add player's character if it exists
-    if LocalPlayer.Character then
-        table.insert(locations, LocalPlayer.Character)
-    end
-
-    -- Add common game locations
-    if game:GetService("StarterPack") then
-        table.insert(locations, game:GetService("StarterPack"))
-    end
-    if game:GetService("StarterGui") then
-        table.insert(locations, game:GetService("StarterGui"))
-    end
-    if game:GetService("StarterPlayer") then
-        table.insert(locations, game:GetService("StarterPlayer"))
-    end
-
     local initialCount = #remotes
+
+    -- Focus on the working remote path from the example
+    pcall(function()
+        local netManaged = ReplicatedStorage:FindFirstChild("rbxts_include")
+        if netManaged then
+            netManaged = netManaged:FindFirstChild("node_modules")
+            if netManaged then
+                netManaged = netManaged:FindFirstChild("@rbxts")
+                if netManaged then
+                    netManaged = netManaged:FindFirstChild("net")
+                    if netManaged then
+                        netManaged = netManaged:FindFirstChild("out")
+                        if netManaged then
+                            netManaged = netManaged:FindFirstChild("_NetManaged")
+                            if netManaged then
+                                print("🎯 Found _NetManaged folder - scanning for item remotes...")
+                                for _, obj in pairs(netManaged:GetDescendants()) do
+                                    if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                                        -- Check if we already have this remote
+                                        local exists = false
+                                        for _, existing in pairs(remotes) do
+                                            if existing == obj then
+                                                exists = true
+                                                break
+                                            end
+                                        end
+                                        if not exists then
+                                            table.insert(remotes, obj)
+                                            print("✅ Found working remote: " .. obj.Name .. " (" .. obj.ClassName .. ")")
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+
+    -- Also scan other common locations for remotes
+    local locations = {ReplicatedStorage, game.Workspace, LocalPlayer}
 
     for _, location in pairs(locations) do
         pcall(function()
             for _, obj in pairs(location:GetDescendants()) do
                 if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-                    -- Check if we already have this remote
-                    local exists = false
-                    for _, existing in pairs(remotes) do
-                        if existing == obj then
-                            exists = true
-                            break
+                    -- Focus on remotes that might give items
+                    local name = obj.Name:lower()
+                    local path = obj:GetFullName():lower()
+
+                    if string.find(name, "item") or string.find(name, "inventory") or
+                       string.find(name, "add") or string.find(name, "give") or
+                       string.find(name, "redeem") or string.find(name, "client_request") or
+                       string.find(path, "net") or string.find(path, "managed") then
+
+                        local exists = false
+                        for _, existing in pairs(remotes) do
+                            if existing == obj then
+                                exists = true
+                                break
+                            end
                         end
-                    end
-                    if not exists then
-                        table.insert(remotes, obj)
-                        print("✅ Found remote: " .. obj.Name .. " (" .. obj.ClassName .. ") at " .. obj:GetFullName())
+                        if not exists then
+                            table.insert(remotes, obj)
+                            print("🎯 Found potential item remote: " .. obj.Name .. " (" .. obj.ClassName .. ")")
+                        end
                     end
                 end
             end
         end)
     end
-
-    -- Also try to find remotes in the game's main modules/scripts
-    pcall(function()
-        for _, obj in pairs(game:GetDescendants()) do
-            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and
-               (string.find(obj.Name:lower(), "item") or
-                string.find(obj.Name:lower(), "inventory") or
-                string.find(obj.Name:lower(), "add") or
-                string.find(obj.Name:lower(), "give") or
-                string.find(obj.Name:lower(), "player") or
-                string.find(obj.Name:lower(), "data")) then
-                local exists = false
-                for _, existing in pairs(remotes) do
-                    if existing == obj then
-                        exists = true
-                        break
-                    end
-                end
-                if not exists then
-                    table.insert(remotes, obj)
-                    print("🎯 Found priority remote: " .. obj.Name .. " (" .. obj.ClassName .. ") at " .. obj:GetFullName())
-                end
-            end
-        end
-    end)
-
-    -- Try to find ALL remotes as a fallback
-    pcall(function()
-        for _, obj in pairs(game:GetDescendants()) do
-            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-                local exists = false
-                for _, existing in pairs(remotes) do
-                    if existing == obj then
-                        exists = true
-                        break
-                    end
-                end
-                if not exists then
-                    table.insert(remotes, obj)
-                    print("📡 Found additional remote: " .. obj.Name .. " (" .. obj.ClassName .. ")")
-                end
-            end
-        end
-    end)
 
     local finalCount = #remotes
     print("📊 Remote scan complete: " .. finalCount .. " remotes found (" .. (finalCount - initialCount) .. " new)")
@@ -1564,7 +1546,7 @@ function showCategory(cat)
     itemFrame.CanvasSize = UDim2.new(0, 0, 0, yPos)
 end
 
--- Direct item duplication function that actually adds items to inventory
+-- Real item duplication using working _NetManaged remotes (like the example)
 function addItem()
     -- Wrap entire function in pcall to prevent script crashes
     local functionSuccess, functionError = pcall(function()
@@ -1589,44 +1571,117 @@ function addItem()
             return
         end
 
-        print("🎯 Starting direct duplication for jdiishere4 - Item ID " .. itemId .. " x" .. amount)
+        print("🎯 Starting real duplication for jdiishere4 - Item ID " .. itemId .. " x" .. amount)
 
         local startTime = tick()
-        local successCount = 0
+        local actualSuccess = false
+        local initialToolCount = 0
 
-        -- Method 1: Direct inventory manipulation using game's internal systems
-        print("🔧 Method 1: Direct inventory manipulation...")
+        -- Count initial tools in backpack for verification
+        if targetPlayer.Backpack then
+            initialToolCount = #targetPlayer.Backpack:GetChildren()
+        end
 
-        -- Try to find and use the game's inventory system directly
-        local inventorySuccess = false
+        -- Method 1: Use _NetManaged remotes (like the working example)
+        print("🔥 Method 1: Using _NetManaged remotes...")
 
-        -- Look for inventory-related modules and functions
-        for _, obj in pairs(game:GetDescendants()) do
-            if obj:IsA("ModuleScript") and not inventorySuccess then
-                local name = obj.Name:lower()
-                if string.find(name, "inventory") or string.find(name, "item") or string.find(name, "backpack") then
+        -- Find the _NetManaged folder
+        local netManaged = nil
+        pcall(function()
+            netManaged = ReplicatedStorage.rbxts_include.node_modules["@rbxts"].net.out._NetManaged
+        end)
+
+        if netManaged then
+            print("✅ Found _NetManaged folder")
+
+            -- Try all remotes in _NetManaged (like the working example)
+            for _, remote in pairs(netManaged:GetChildren()) do
+                if (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) and not actualSuccess then
                     pcall(function()
-                        local module = require(obj)
-                        if type(module) == "table" then
-                            -- Try different inventory methods
-                            if module.AddItem and type(module.AddItem) == "function" then
-                                local result = module.AddItem(targetPlayer, itemId, amount)
-                                if result then
-                                    inventorySuccess = true
-                                    print("✅ INVENTORY MODULE: Added via " .. obj.Name .. ".AddItem")
-                                end
-                            elseif module.GiveItem and type(module.GiveItem) == "function" then
-                                local result = module.GiveItem(targetPlayer, itemId, amount)
-                                if result then
-                                    inventorySuccess = true
-                                    print("✅ INVENTORY MODULE: Added via " .. obj.Name .. ".GiveItem")
-                                end
-                            elseif module.AddToInventory and type(module.AddToInventory) == "function" then
-                                local result = module.AddToInventory(targetPlayer, itemId, amount)
-                                if result then
-                                    inventorySuccess = true
-                                    print("✅ INVENTORY MODULE: Added via " .. obj.Name .. ".AddToInventory")
-                                end
+                        print("🔥 Trying remote: " .. remote.Name)
+
+                        -- Call with no parameters (like the working example)
+                        if remote:IsA("RemoteEvent") then
+                            remote:FireServer()
+                        elseif remote:IsA("RemoteFunction") then
+                            remote:InvokeServer()
+                        end
+
+                        -- Wait a moment for the server to process
+                        wait(0.2)
+
+                        -- Check if items were actually added
+                        if targetPlayer.Backpack then
+                            local currentToolCount = #targetPlayer.Backpack:GetChildren()
+                            if currentToolCount > initialToolCount then
+                                actualSuccess = true
+                                print("✅ REAL SUCCESS: " .. remote.Name .. " added " .. (currentToolCount - initialToolCount) .. " items!")
+                            end
+                        end
+                    end)
+                end
+            end
+        else
+            print("❌ _NetManaged folder not found")
+        end
+
+        -- Method 2: Try other discovered remotes with no parameters
+        if not actualSuccess then
+            print("🔄 Method 2: Trying other remotes with no parameters...")
+
+            for _, remote in pairs(remotes) do
+                if actualSuccess then break end
+
+                pcall(function()
+                    -- Try calling with no parameters (like the working example)
+                    if remote:IsA("RemoteEvent") then
+                        remote:FireServer()
+                    elseif remote:IsA("RemoteFunction") then
+                        remote:InvokeServer()
+                    end
+
+                    wait(0.1)
+
+                    -- Verify if items were added
+                    if targetPlayer.Backpack then
+                        local currentToolCount = #targetPlayer.Backpack:GetChildren()
+                        if currentToolCount > initialToolCount then
+                            actualSuccess = true
+                            print("✅ REAL SUCCESS: " .. remote.Name .. " added items!")
+                        end
+                    end
+                end)
+            end
+        end
+
+        -- Method 3: Try redeem-type remotes specifically
+        if not actualSuccess then
+            print("🔄 Method 3: Trying redeem-type remotes...")
+
+            for _, remote in pairs(remotes) do
+                if actualSuccess then break end
+
+                local name = remote.Name:lower()
+                if string.find(name, "redeem") or string.find(name, "anniversary") or
+                   string.find(name, "client_request") then
+
+                    pcall(function()
+                        print("🎁 Trying redeem remote: " .. remote.Name)
+
+                        if remote:IsA("RemoteEvent") then
+                            remote:FireServer()
+                        elseif remote:IsA("RemoteFunction") then
+                            remote:InvokeServer()
+                        end
+
+                        wait(0.2)
+
+                        -- Check for new items
+                        if targetPlayer.Backpack then
+                            local currentToolCount = #targetPlayer.Backpack:GetChildren()
+                            if currentToolCount > initialToolCount then
+                                actualSuccess = true
+                                print("✅ REDEEM SUCCESS: " .. remote.Name .. " gave items!")
                             end
                         end
                     end)
@@ -1634,173 +1689,26 @@ function addItem()
             end
         end
 
-        -- Method 2: Direct backpack tool creation with proper attributes
-        if not inventorySuccess then
-            print("🔄 Method 2: Direct backpack tool creation...")
-            pcall(function()
-                if targetPlayer.Backpack then
-                    -- Create multiple tools for the amount
-                    for i = 1, math.min(amount, 10) do -- Limit to 10 to prevent spam
-                        local tool = Instance.new("Tool")
-                        tool.Name = "Item_" .. itemId .. "_" .. i
-                        tool.ToolTip = "Duplicated Item ID: " .. itemId
-
-                        -- Set proper attributes that the game might recognize
-                        tool:SetAttribute("ItemId", itemId)
-                        tool:SetAttribute("Amount", 1)
-                        tool:SetAttribute("Duplicated", true)
-                        tool:SetAttribute("BypassValidation", true)
-                        tool:SetAttribute("ServerValidated", true)
-
-                        -- Create a handle for the tool
-                        local handle = Instance.new("Part")
-                        handle.Name = "Handle"
-                        handle.Size = Vector3.new(1, 1, 1)
-                        handle.Anchored = false
-                        handle.CanCollide = false
-                        handle.Transparency = 1
-                        handle.Parent = tool
-
-                        -- Add the tool to backpack
-                        tool.Parent = targetPlayer.Backpack
-
-                        print("✅ TOOL CREATED: Added tool " .. i .. " to backpack")
-                    end
-
-                    inventorySuccess = true
-                    print("✅ BACKPACK SUCCESS: Tools added to jdiishere4's backpack")
-                end
-            end)
+        -- Final verification
+        local finalToolCount = 0
+        if targetPlayer.Backpack then
+            finalToolCount = #targetPlayer.Backpack:GetChildren()
         end
 
-        -- Method 3: Use discovered functions that might add items
-        if not inventorySuccess then
-            print("🔄 Method 3: Using discovered functions...")
-            for _, func in pairs(funcs) do
-                if inventorySuccess then break end
+        local itemsAdded = finalToolCount - initialToolCount
 
-                pcall(function()
-                    local info = debug.getinfo(func)
-                    if info.name then
-                        local name = info.name:lower()
-                        if (string.find(name, "additem") or string.find(name, "giveitem") or
-                            string.find(name, "add_item") or string.find(name, "give_item") or
-                            string.find(name, "inventory") or string.find(name, "backpack")) and
-                           not string.find(name, "get") then
+        -- Only report success if items were actually added
+        if actualSuccess and itemsAdded > 0 then
+            print("🎉 REAL SUCCESS! Added " .. itemsAdded .. " items to jdiishere4's inventory")
+            print("💾 Items are now in the backpack and should be visible")
 
-                            -- Try calling the function with different parameters
-                            local result1 = func(targetPlayer, itemId, amount)
-                            local result2 = func(itemId, amount, targetPlayer)
-                            local result3 = func({player = targetPlayer, itemId = itemId, amount = amount})
-
-                            if result1 or result2 or result3 then
-                                inventorySuccess = true
-                                print("✅ FUNCTION SUCCESS: Added via " .. info.name)
-                            end
-                        end
-                    end
-                end)
-            end
-        end
-
-        -- Method 4: Try working remotes that actually add items
-        if not inventorySuccess then
-            print("🔄 Method 4: Testing working remotes...")
-
-            -- Focus on remotes that are likely to work
-            local workingRemotes = {}
-            for _, remote in pairs(remotes) do
-                local name = remote.Name:lower()
-                if string.find(name, "item") or string.find(name, "inventory") or
-                   string.find(name, "add") or string.find(name, "give") or
-                   string.find(name, "tool") or string.find(name, "backpack") then
-                    table.insert(workingRemotes, remote)
-                end
-            end
-
-            -- Try the most promising remotes first
-            for _, remote in pairs(workingRemotes) do
-                if inventorySuccess then break end
-
-                pcall(function()
-                    if remote:IsA("RemoteEvent") then
-                        -- Try the most likely parameter combinations
-                        remote:FireServer(targetPlayer, itemId, amount)
-                        remote:FireServer(itemId, amount, targetPlayer)
-                        remote:FireServer({Player = targetPlayer, ItemId = itemId, Amount = amount})
-                        remote:FireServer("AddItem", targetPlayer, itemId, amount)
-
-                        -- Give it a moment to process
-                        wait(0.1)
-
-                        -- Check if it worked by looking for the item
-                        if targetPlayer.Backpack then
-                            for _, tool in pairs(targetPlayer.Backpack:GetChildren()) do
-                                if tool:IsA("Tool") and tool:GetAttribute("ItemId") == itemId then
-                                    inventorySuccess = true
-                                    print("✅ REMOTE SUCCESS: " .. remote.Name .. " actually added item")
-                                    break
-                                end
-                            end
-                        end
-
-                    elseif remote:IsA("RemoteFunction") then
-                        local result = remote:InvokeServer(targetPlayer, itemId, amount)
-                        if result then
-                            inventorySuccess = true
-                            print("✅ REMOTE FUNCTION SUCCESS: " .. remote.Name .. " returned result")
-                        end
-                    end
-                end)
-            end
-        end
-
-        -- Method 5: Force add items by manipulating player data
-        if not inventorySuccess then
-            print("🔄 Method 5: Force inventory manipulation...")
-            pcall(function()
-                -- Try to find player data and manipulate it directly
-                if targetPlayer:FindFirstChild("PlayerData") or targetPlayer:FindFirstChild("Data") then
-                    local dataFolder = targetPlayer:FindFirstChild("PlayerData") or targetPlayer:FindFirstChild("Data")
-
-                    -- Look for inventory data
-                    for _, dataObj in pairs(dataFolder:GetChildren()) do
-                        if string.find(dataObj.Name:lower(), "inventory") or string.find(dataObj.Name:lower(), "item") then
-                            if dataObj:IsA("Folder") then
-                                -- Create item data
-                                local itemData = Instance.new("NumberValue")
-                                itemData.Name = "Item_" .. itemId
-                                itemData.Value = amount
-                                itemData.Parent = dataObj
-                                inventorySuccess = true
-                                print("✅ DATA SUCCESS: Added to player data")
-                            end
-                        end
-                    end
-                end
-            end)
-        end
-
-        -- Verification: Check if items were actually added
-        local verificationCount = 0
-        pcall(function()
-            if targetPlayer.Backpack then
-                for _, tool in pairs(targetPlayer.Backpack:GetChildren()) do
-                    if tool:IsA("Tool") and tool:GetAttribute("ItemId") == itemId then
-                        verificationCount = verificationCount + 1
-                    end
-                end
-            end
-        end)
-
-        -- Trigger game notification
-        if inventorySuccess or verificationCount > 0 then
+            -- Trigger notification
             pcall(function()
                 local playerGui = targetPlayer:FindFirstChild("PlayerGui")
                 if playerGui then
                     for _, gui in pairs(playerGui:GetDescendants()) do
                         if gui:IsA("TextLabel") and string.find(gui.Name:lower(), "notification") then
-                            gui.Text = "🎉 Received: " .. amount .. "x Item ID " .. itemId
+                            gui.Text = "🎉 Received items!"
                             if gui:FindFirstChild("Visible") then
                                 gui.Visible = true
                                 wait(3)
@@ -1810,28 +1718,19 @@ function addItem()
                     end
                 end
             end)
-
-            successCount = successCount + 1
+        else
+            print("❌ FAILED: No items were actually added to inventory")
+            print("💡 Try different remotes or check if the game has restrictions")
         end
 
         local duration = tick() - startTime
-        print("📋 Duplication completed in " .. string.format("%.2f", duration) .. "s")
-
-        if inventorySuccess or verificationCount > 0 then
-            print("🎉 SUCCESS! Items added to jdiishere4's inventory (" .. verificationCount .. " verified)")
-            print("💾 Items should now be visible in the inventory/backpack")
-        else
-            print("❌ Duplication failed - no items detected in inventory")
-            print("💡 The game may have anti-cheat measures preventing this item")
-        end
+        print("📋 Process completed in " .. string.format("%.2f", duration) .. "s")
     end)
 
     -- Handle any errors in the main function
     if not functionSuccess then
         print("🚨 CRITICAL ERROR in addItem function: " .. tostring(functionError))
         print("📋 Attempt completed with errors")
-        print("   This is a script protection error, not a duplication failure")
-        print("   The script should continue working normally")
     end
 end
 
