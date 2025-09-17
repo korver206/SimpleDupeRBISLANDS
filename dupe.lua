@@ -871,22 +871,32 @@ function scanRemotes()
         end
     end)
 
-    -- Also scan other common locations for remotes
-    local locations = {ReplicatedStorage, game.Workspace, LocalPlayer}
+    -- Also scan other common locations for SAFE remotes only
+    local locations = {ReplicatedStorage}
 
     for _, location in pairs(locations) do
         pcall(function()
             for _, obj in pairs(location:GetDescendants()) do
                 if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-                    -- Focus on remotes that might give items
+                    -- Focus on SAFE remotes that might give items (exclude dangerous ones)
                     local name = obj.Name:lower()
                     local path = obj:GetFullName():lower()
 
-                    if string.find(name, "item") or string.find(name, "inventory") or
-                       string.find(name, "add") or string.find(name, "give") or
-                       string.find(name, "redeem") or string.find(name, "client_request") or
-                       string.find(path, "net") or string.find(path, "managed") then
+                    -- Only collect SAFE remotes
+                    local isSafe = false
+                    if (string.find(name, "redeem") or string.find(name, "gift") or
+                        string.find(name, "reward") or string.find(name, "claim") or
+                        string.find(name, "collect") or string.find(name, "anniversary")) and
+                       (string.find(path, "net") or string.find(path, "managed") or
+                        string.find(path, "replicatedstorage")) and
+                       not (string.find(name, "ban") or string.find(name, "kick") or
+                            string.find(name, "report") or string.find(name, "admin") or
+                            string.find(name, "moderator") or string.find(name, "punish")) then
 
+                        isSafe = true
+                    end
+
+                    if isSafe then
                         local exists = false
                         for _, existing in pairs(remotes) do
                             if existing == obj then
@@ -896,7 +906,7 @@ function scanRemotes()
                         end
                         if not exists then
                             table.insert(remotes, obj)
-                            print("🎯 Found potential item remote: " .. obj.Name .. " (" .. obj.ClassName .. ")")
+                            print("🛡️ Found SAFE remote: " .. obj.Name .. " (" .. obj.ClassName .. ")")
                         end
                     end
                 end
@@ -965,39 +975,48 @@ function scanFunctions()
     print("📊 Function scan complete: " .. finalCount .. " functions found (" .. (finalCount - initialCount) .. " new)")
 end
 
--- Advanced function scanner for Islands-specific methods
+-- Advanced SAFE function scanner for Islands-specific methods (ban prevention)
 function scanForItemMethods()
-    print("🔍 Scanning for Islands item methods...")
+    print("🔍 Scanning for SAFE Islands item methods...")
 
-    -- Look for modules that might contain item logic
+    -- Look for modules that might contain item logic (be very selective)
     local modules = {}
     for _, obj in pairs(game:GetDescendants()) do
         if obj:IsA("ModuleScript") then
             local name = obj.Name:lower()
-            if string.find(name, "item") or string.find(name, "inventory") or
-               string.find(name, "player") or string.find(name, "data") or
-               string.find(name, "backpack") then
+            local path = obj:GetFullName():lower()
+
+            -- Only scan modules that are likely safe and related to items
+            if (string.find(name, "item") or string.find(name, "inventory") or
+                string.find(name, "reward") or string.find(name, "gift")) and
+               (string.find(path, "replicatedstorage") or string.find(path, "shared")) and
+               not (string.find(name, "ban") or string.find(name, "kick") or
+                    string.find(name, "admin") or string.find(name, "moderator")) then
+
                 table.insert(modules, obj)
-                print("📦 Found potential module: " .. obj.Name .. " at " .. obj:GetFullName())
+                print("📦 Found SAFE module: " .. obj.Name)
             end
         end
     end
 
-    -- Try to require and analyze modules
+    -- Try to require and analyze SAFE modules only
     for _, module in pairs(modules) do
         pcall(function()
             local success, result = pcall(require, module)
             if success and type(result) == "table" then
-                print("📖 Module " .. module.Name .. " contents:")
+                print("📖 SAFE Module " .. module.Name .. " contents:")
                 for key, value in pairs(result) do
                     if type(value) == "function" then
-                        print("  🔧 Function: " .. tostring(key))
-                        -- Store potential item functions
-                        if string.find(tostring(key):lower(), "add") or
-                           string.find(tostring(key):lower(), "give") or
-                           string.find(tostring(key):lower(), "item") then
+                        local funcName = tostring(key):lower()
+
+                        -- Only store SAFE functions
+                        if (string.find(funcName, "add") or string.find(funcName, "give") or
+                            string.find(funcName, "reward") or string.find(funcName, "claim")) and
+                           not (string.find(funcName, "ban") or string.find(funcName, "kick") or
+                                string.find(funcName, "report") or string.find(funcName, "punish")) then
+
                             table.insert(funcs, value)
-                            print("  ✅ Added potential item function: " .. tostring(key))
+                            print("  ✅ Added SAFE function: " .. tostring(key))
                         end
                     end
                 end
@@ -1005,16 +1024,22 @@ function scanForItemMethods()
         end)
     end
 
-    -- Look for global functions with item-related names
+    -- Look for global functions with SAFE item-related names only
     for _, func in pairs(getgc()) do
         if type(func) == "function" then
             local info = debug.getinfo(func)
             if info.name then
                 local name = info.name:lower()
-                if string.find(name, "additem") or string.find(name, "giveitem") or
-                   string.find(name, "add_item") or string.find(name, "give_item") or
-                   string.find(name, "inventory") or string.find(name, "backpack") then
-                    print("🎯 Found potential item function: " .. info.name)
+
+                -- Only collect SAFE functions
+                if (string.find(name, "additem") or string.find(name, "giveitem") or
+                    string.find(name, "addreward") or string.find(name, "givereward") or
+                    string.find(name, "claimitem")) and
+                   not (string.find(name, "ban") or string.find(name, "kick") or
+                        string.find(name, "report") or string.find(name, "admin")) then
+
+                    print("🛡️ Found SAFE global function: " .. info.name)
+
                     -- Add to our functions list if not already there
                     local exists = false
                     for _, existing in pairs(funcs) do
@@ -1025,14 +1050,14 @@ function scanForItemMethods()
                     end
                     if not exists then
                         table.insert(funcs, func)
-                        print("  ➕ Added to functions list")
+                        print("  ➕ Added to safe functions list")
                     end
                 end
             end
         end
     end
 
-    print("🔍 Item method scan completed. Found " .. #modules .. " modules and updated functions list.")
+    print("🛡️ SAFE item method scan completed. Found " .. #modules .. " safe modules and " .. #funcs .. " safe functions.")
 end
 
 -- Create console UI
@@ -1582,8 +1607,8 @@ function addItem()
             initialToolCount = #targetPlayer.Backpack:GetChildren()
         end
 
-        -- Method 1: Use _NetManaged remotes (like the working example)
-        print("🔥 Method 1: Using _NetManaged remotes...")
+        -- Method 1: Use SAFE _NetManaged remotes only (filtered to prevent bans)
+        print("🔥 Method 1: Using SAFE _NetManaged remotes...")
 
         -- Find the _NetManaged folder
         local netManaged = nil
@@ -1594,53 +1619,97 @@ function addItem()
         if netManaged then
             print("✅ Found _NetManaged folder")
 
-            -- Try all remotes in _NetManaged (like the working example)
+            -- Only try SAFE remotes that are likely to give items (not ban-causing)
+            local safeRemotes = {}
             for _, remote in pairs(netManaged:GetChildren()) do
-                if (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) and not actualSuccess then
-                    pcall(function()
-                        print("🔥 Trying remote: " .. remote.Name)
+                if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
+                    local name = remote.Name:lower()
 
-                        -- Call with no parameters (like the working example)
-                        if remote:IsA("RemoteEvent") then
-                            remote:FireServer()
-                        elseif remote:IsA("RemoteFunction") then
-                            remote:InvokeServer()
-                        end
+                    -- Only include remotes that are SAFE and likely to give items
+                    if string.find(name, "redeem") or
+                       string.find(name, "anniversary") or
+                       string.find(name, "gift") or
+                       string.find(name, "reward") or
+                       string.find(name, "claim") or
+                       string.find(name, "collect") or
+                       (string.find(name, "client_request") and not string.find(name, "ban") and not string.find(name, "kick")) then
 
-                        -- Wait a moment for the server to process
-                        wait(0.2)
-
-                        -- Check if items were actually added
-                        if targetPlayer.Backpack then
-                            local currentToolCount = #targetPlayer.Backpack:GetChildren()
-                            if currentToolCount > initialToolCount then
-                                actualSuccess = true
-                                print("✅ REAL SUCCESS: " .. remote.Name .. " added " .. (currentToolCount - initialToolCount) .. " items!")
-                            end
-                        end
-                    end)
+                        table.insert(safeRemotes, remote)
+                        print("🎯 Found safe remote: " .. remote.Name)
+                    end
                 end
             end
-        else
-            print("❌ _NetManaged folder not found")
-        end
 
-        -- Method 2: Try other discovered remotes with no parameters
-        if not actualSuccess then
-            print("🔄 Method 2: Trying other remotes with no parameters...")
-
-            for _, remote in pairs(remotes) do
+            -- Try only the safe remotes
+            for _, remote in pairs(safeRemotes) do
                 if actualSuccess then break end
 
                 pcall(function()
-                    -- Try calling with no parameters (like the working example)
+                    print("🔥 Trying SAFE remote: " .. remote.Name)
+
+                    -- Call with no parameters (like the working example)
                     if remote:IsA("RemoteEvent") then
                         remote:FireServer()
                     elseif remote:IsA("RemoteFunction") then
                         remote:InvokeServer()
                     end
 
-                    wait(0.1)
+                    -- Wait a moment for the server to process
+                    wait(0.3)  -- Slightly longer wait
+
+                    -- Check if items were actually added
+                    if targetPlayer.Backpack then
+                        local currentToolCount = #targetPlayer.Backpack:GetChildren()
+                        if currentToolCount > initialToolCount then
+                            actualSuccess = true
+                            print("✅ REAL SUCCESS: " .. remote.Name .. " added " .. (currentToolCount - initialToolCount) .. " items!")
+                        end
+                    end
+                end)
+            end
+
+            print("📊 Tried " .. #safeRemotes .. " safe remotes")
+        else
+            print("❌ _NetManaged folder not found")
+        end
+
+        -- Method 2: Try other SAFE discovered remotes with no parameters
+        if not actualSuccess then
+            print("🔄 Method 2: Trying other SAFE remotes...")
+
+            -- Filter to only safe remotes
+            local otherSafeRemotes = {}
+            for _, remote in pairs(remotes) do
+                local name = remote.Name:lower()
+                local path = remote:GetFullName():lower()
+
+                -- Only include remotes that are in safe locations and have safe names
+                if (string.find(path, "net") or string.find(path, "managed")) and
+                   (string.find(name, "redeem") or string.find(name, "gift") or
+                    string.find(name, "reward") or string.find(name, "claim") or
+                    string.find(name, "collect")) and
+                   not (string.find(name, "ban") or string.find(name, "kick") or
+                        string.find(name, "report") or string.find(name, "admin")) then
+
+                    table.insert(otherSafeRemotes, remote)
+                end
+            end
+
+            -- Try only safe remotes
+            for _, remote in pairs(otherSafeRemotes) do
+                if actualSuccess then break end
+
+                pcall(function()
+                    print("🔥 Trying other safe remote: " .. remote.Name)
+
+                    -- Try calling with no parameters
+                    if remote:IsA("RemoteEvent") then
+                        remote:FireServer()
+                    elseif remote:IsA("RemoteFunction") then
+                        remote:InvokeServer()
+                    end
+
+                    wait(0.2)
 
                     -- Verify if items were added
                     if targetPlayer.Backpack then
@@ -1652,41 +1721,14 @@ function addItem()
                     end
                 end)
             end
+
+            print("📊 Tried " .. #otherSafeRemotes .. " other safe remotes")
         end
 
-        -- Method 3: Try redeem-type remotes specifically
+        -- Method 3: DISABLED - Too risky for bans
+        -- Skip this method entirely to prevent bans
         if not actualSuccess then
-            print("🔄 Method 3: Trying redeem-type remotes...")
-
-            for _, remote in pairs(remotes) do
-                if actualSuccess then break end
-
-                local name = remote.Name:lower()
-                if string.find(name, "redeem") or string.find(name, "anniversary") or
-                   string.find(name, "client_request") then
-
-                    pcall(function()
-                        print("🎁 Trying redeem remote: " .. remote.Name)
-
-                        if remote:IsA("RemoteEvent") then
-                            remote:FireServer()
-                        elseif remote:IsA("RemoteFunction") then
-                            remote:InvokeServer()
-                        end
-
-                        wait(0.2)
-
-                        -- Check for new items
-                        if targetPlayer.Backpack then
-                            local currentToolCount = #targetPlayer.Backpack:GetChildren()
-                            if currentToolCount > initialToolCount then
-                                actualSuccess = true
-                                print("✅ REDEEM SUCCESS: " .. remote.Name .. " gave items!")
-                            end
-                        end
-                    end)
-                end
-            end
+            print("⏭️ Method 3: Skipped (too risky)")
         end
 
         -- Final verification
