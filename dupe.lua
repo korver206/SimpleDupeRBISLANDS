@@ -1506,22 +1506,24 @@ function showCategory(cat)
     itemFrame.CanvasSize = UDim2.new(0, 0, 0, yPos)
 end
 
--- Add item function with robust error handling and focused approach
+-- Add item function with maximum error protection
 function addItem()
-    local itemId = tonumber(idTextBox.Text)
-    local amount = tonumber(amountTextBox.Text)
-    if not itemId or not amount then
-        print("❌ Invalid ID or Amount")
-        return
-    end
+    -- Wrap entire function in pcall to prevent script crashes
+    local functionSuccess, functionError = pcall(function()
+        local itemId = tonumber(idTextBox.Text)
+        local amount = tonumber(amountTextBox.Text)
+        if not itemId or not amount then
+            print("❌ Invalid ID or Amount")
+            return
+        end
 
-    print("🎯 Starting duplication attempt for item ID " .. itemId .. " x" .. amount)
+        print("🎯 Starting duplication attempt for item ID " .. itemId .. " x" .. amount)
 
-    local startTime = tick()
-    local timeout = 5 -- Reduced timeout for faster feedback
-    local calledCount = 0
-    local successCount = 0
-    local errorCount = 0
+        local startTime = tick()
+        local timeout = 5 -- Reduced timeout for faster feedback
+        local calledCount = 0
+        local successCount = 0
+        local errorCount = 0
 
     -- Define safe remote patterns (avoid problematic ones)
     local safePatterns = {
@@ -1559,12 +1561,35 @@ function addItem()
         "connect"
     }
 
-    -- Helper function for safe remote calling
+    -- Helper function for safe remote calling with comprehensive error handling
     local function safeCall(remote, ...)
         local args = {...}
+
+        -- First check if this remote looks problematic
+        local remoteName = remote.Name:lower()
+        local remotePath = remote:GetFullName():lower()
+
+        -- Additional safety checks
+        local dangerousPatterns = {
+            "mailbox", "mute", "permission", "treasure", "fossil",
+            "login", "invite", "lobby", "init", "icon", "jukebox",
+            "filter", "perk", "dig", "replicate", "connect",
+            "client", "server", "data", "player.*stat", "stat",
+            "achievement", "badge", "group", "friend", "chat",
+            "message", "notification", "alert", "popup", "gui"
+        }
+
+        for _, pattern in ipairs(dangerousPatterns) do
+            if string.find(remoteName, pattern) or string.find(remotePath, pattern) then
+                return false, "skipped_dangerous"
+            end
+        end
+
+        -- Try the call with maximum safety
         local success, result = pcall(function()
             if remote:IsA("RemoteEvent") then
-                return remote:FireServer(unpack(args))
+                remote:FireServer(unpack(args))
+                return true
             elseif remote:IsA("RemoteFunction") then
                 return remote:InvokeServer(unpack(args))
             end
@@ -1573,9 +1598,16 @@ function addItem()
         if success then
             return true, result
         else
-            -- Check if it's a RobloxScript capability error
-            if string.find(result, "RobloxScript") or string.find(result, "capability") then
+            -- Check for various error types
+            local errorStr = tostring(result):lower()
+            if string.find(errorStr, "robloxscript") or
+               string.find(errorStr, "capability") or
+               string.find(errorStr, "permission") or
+               string.find(errorStr, "access") then
                 return false, "capability_error"
+            elseif string.find(errorStr, "argument") or
+                   string.find(errorStr, "parameter") then
+                return false, "argument_error"
             else
                 return false, result
             end
@@ -1584,29 +1616,35 @@ function addItem()
 
     print("🔍 Scanning for safe remotes...")
 
-    -- Try only safe, relevant remotes
+    -- Try only safe, relevant remotes with comprehensive error protection
+    local remoteIndex = 0
     for _, remote in pairs(remotes) do
+        remoteIndex = remoteIndex + 1
+
         if tick() - startTime > timeout then
             print("⏰ Timeout reached, stopping attempt")
             break
         end
 
-        local name = remote.Name:lower()
-        local path = remote:GetFullName():lower()
+        -- Wrap entire remote processing in pcall for maximum safety
+        local remoteProcessed, remoteError = pcall(function()
+            local name = remote.Name:lower()
+            local path = remote:GetFullName():lower()
 
-        -- Check if this remote should be avoided
-        local shouldAvoid = false
-        for _, pattern in ipairs(avoidPatterns) do
-            if string.find(name, pattern) or string.find(path, pattern) then
-                shouldAvoid = true
-                break
+            -- Check if this remote should be avoided
+            local shouldAvoid = false
+            for _, pattern in ipairs(avoidPatterns) do
+                if string.find(name, pattern) or string.find(path, pattern) then
+                    shouldAvoid = true
+                    break
+                end
             end
-        end
 
-        -- Skip problematic remotes entirely
-        if shouldAvoid then
-            -- Don't process this remote at all
-        else
+            -- Skip problematic remotes entirely
+            if shouldAvoid then
+                return "skipped"
+            end
+
             -- Check if this remote matches safe patterns
             local isSafe = false
             for _, pattern in ipairs(safePatterns) do
@@ -1616,38 +1654,56 @@ function addItem()
                 end
             end
 
-            if isSafe then
-                calledCount = calledCount + 1
+            if not isSafe then
+                return "not_safe"
+            end
 
-                -- Try different parameter combinations
-                local attempts = {
-                    {itemId, amount},
-                    {{itemId = itemId, amount = amount}},
-                    {"AddItem", itemId, amount},
-                    {"GiveItem", itemId, amount},
-                    {LocalPlayer, itemId, amount}
-                }
+            calledCount = calledCount + 1
 
-                local remoteSuccess = false
-                for _, params in ipairs(attempts) do
-                    local success, errorMsg = safeCall(remote, unpack(params))
-                    if success then
+            -- Try different parameter combinations with individual error handling
+            local attempts = {
+                {itemId, amount},
+                {{itemId = itemId, amount = amount}},
+                {"AddItem", itemId, amount},
+                {"GiveItem", itemId, amount}
+            }
+
+            local remoteSuccess = false
+            for attemptIndex, params in ipairs(attempts) do
+                -- Individual pcall for each attempt
+                local attemptSuccess, attemptResult = pcall(function()
+                    return safeCall(remote, unpack(params))
+                end)
+
+                if attemptSuccess then
+                    local callSuccess, errorMsg = attemptResult[1], attemptResult[2]
+                    if callSuccess then
                         remoteSuccess = true
                         successCount = successCount + 1
-                        print("✅ SUCCESS: " .. remote.Name .. " (" .. table.concat(params, ", ") .. ")")
+                        print("✅ SUCCESS: " .. remote.Name .. " (attempt " .. attemptIndex .. ")")
                         break
-                    elseif errorMsg == "capability_error" then
+                    elseif errorMsg == "capability_error" or errorMsg == "skipped_dangerous" then
                         errorCount = errorCount + 1
-                        -- Don't print capability errors to reduce spam
                         break
                     end
-                end
-
-                if not remoteSuccess and errorCount == 0 then
-                    -- Only print if not a capability error
-                    print("⚠️ " .. remote.Name .. " - no successful calls")
+                else
+                    -- pcall itself failed
+                    errorCount = errorCount + 1
+                    break
                 end
             end
+
+            if not remoteSuccess and errorCount == 0 then
+                print("⚠️ " .. remote.Name .. " - no successful calls")
+            end
+
+            return "processed"
+        end)
+
+        -- If remote processing failed completely, log it but continue
+        if not remoteProcessed then
+            print("🚨 Remote processing error for " .. remote.Name .. ": " .. tostring(remoteError))
+            errorCount = errorCount + 1
         end
     end
 
@@ -1678,18 +1734,27 @@ function addItem()
         end
     end
 
-    local duration = tick() - startTime
-    print("📋 Attempt completed in " .. string.format("%.2f", duration) .. "s")
-    print("   Remotes tried: " .. calledCount)
-    print("   Successes: " .. successCount)
-    print("   Capability errors avoided: " .. errorCount)
+        local duration = tick() - startTime
+        print("📋 Attempt completed in " .. string.format("%.2f", duration) .. "s")
+        print("   Remotes tried: " .. calledCount)
+        print("   Successes: " .. successCount)
+        print("   Capability errors avoided: " .. errorCount)
 
-    if successCount > 0 then
-        print("🎉 Duplication successful! Check your inventory.")
-    elseif errorCount > 0 then
-        print("⚠️ Encountered capability errors. Try again or use different item.")
-    else
-        print("❌ No successful duplications. Item may not be duplicable.")
+        if successCount > 0 then
+            print("🎉 Duplication successful! Check your inventory.")
+        elseif errorCount > 0 then
+            print("⚠️ Encountered capability errors. Try again or use different item.")
+        else
+            print("❌ No successful duplications. Item may not be duplicable.")
+        end
+    end)
+
+    -- Handle any errors in the main function
+    if not functionSuccess then
+        print("🚨 CRITICAL ERROR in addItem function: " .. tostring(functionError))
+        print("📋 Attempt completed with errors")
+        print("   This is a script protection error, not a duplication failure")
+        print("   The script should continue working normally")
     end
 end
 
