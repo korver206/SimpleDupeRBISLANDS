@@ -1471,6 +1471,38 @@ function createUI()
     statusLabel.TextXAlignment = Enum.TextXAlignment.Left
     statusLabel.Parent = bottomFrame
 
+    -- Analysis button for workspace scanning
+    local analysisButton = Instance.new("TextButton")
+    analysisButton.Size = UDim2.new(0, 120, 0, 25)
+    analysisButton.Position = UDim2.new(0, 270, 0, 35)
+    analysisButton.Text = "🔍 Analyze Workspace"
+    analysisButton.BackgroundColor3 = Color3.fromRGB(100, 100, 150)
+    analysisButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    analysisButton.Parent = bottomFrame
+
+    analysisButton.MouseButton1Click:Connect(function()
+        if analysisButton.Text == "Working..." then return end
+
+        statusLabel.Text = "Analyzing workspace..."
+        statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+        analysisButton.Text = "Working..."
+        analysisButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+
+        task.spawn(function()
+            local workspaceData = scanWorkspace()
+            local analysisResults = analyzeWorkspaceForDuplication()
+
+            statusLabel.Text = "Analysis Complete!"
+            statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+            analysisButton.Text = "🔍 Analyze Workspace"
+            analysisButton.BackgroundColor3 = Color3.fromRGB(100, 100, 150)
+
+            task.wait(3)
+            statusLabel.Text = "Ready"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        end)
+    end)
+
     addButton.MouseButton1Click:Connect(function()
         if addButton.Text == "Working..." then return end -- Prevent spam clicking
 
@@ -1887,11 +1919,291 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
+-- Workspace scanner for comprehensive game analysis
+function scanWorkspace()
+    print("🔍 Starting comprehensive workspace scan...")
+
+    local workspaceDump = {}
+    local scanCount = 0
+    local maxDepth = 10 -- Prevent infinite recursion
+
+    local function scanObject(obj, path, depth)
+        if depth > maxDepth then return end
+        scanCount = scanCount + 1
+
+        local objInfo = {
+            Name = obj.Name,
+            ClassName = obj.ClassName,
+            Path = path,
+            Depth = depth,
+            Properties = {},
+            Children = {}
+        }
+
+        -- Get properties (safely)
+        pcall(function()
+            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                objInfo.RemoteType = obj.ClassName
+                objInfo.Enabled = obj:IsA("RemoteEvent") and "N/A" or "N/A"
+            elseif obj:IsA("ModuleScript") then
+                objInfo.IsModule = true
+            elseif obj:IsA("Script") then
+                objInfo.IsScript = true
+                objInfo.Disabled = obj.Disabled
+            elseif obj:IsA("LocalScript") then
+                objInfo.IsLocalScript = true
+                objInfo.Disabled = obj.Disabled
+            end
+
+            -- Get common properties
+            if obj:IsA("BasePart") then
+                objInfo.Size = tostring(obj.Size)
+                objInfo.Position = tostring(obj.Position)
+                objInfo.Anchored = obj.Anchored
+                objInfo.CanCollide = obj.CanCollide
+            end
+
+            if obj:IsA("Model") then
+                objInfo.PrimaryPart = obj.PrimaryPart and obj.PrimaryPart.Name or "None"
+            end
+        end)
+
+        -- Scan children
+        pcall(function()
+            for _, child in pairs(obj:GetChildren()) do
+                local childPath = path .. "/" .. child.Name
+                local childInfo = scanObject(child, childPath, depth + 1)
+                if childInfo then
+                    table.insert(objInfo.Children, childInfo)
+                end
+            end
+        end)
+
+        return objInfo
+    end
+
+    -- Start scanning from key locations
+    local scanLocations = {
+        {obj = game.Workspace, name = "Workspace"},
+        {obj = game.ReplicatedStorage, name = "ReplicatedStorage"},
+        {obj = game.ServerStorage, name = "ServerStorage"},
+        {obj = game.ServerScriptService, name = "ServerScriptService"},
+        {obj = game.StarterGui, name = "StarterGui"},
+        {obj = game.StarterPack, name = "StarterPack"},
+        {obj = game.StarterPlayer, name = "StarterPlayer"},
+        {obj = game.Teams, name = "Teams"},
+        {obj = game.SoundService, name = "SoundService"},
+        {obj = game.Lighting, name = "Lighting"}
+    }
+
+    for _, location in pairs(scanLocations) do
+        pcall(function()
+            print("📂 Scanning " .. location.name .. "...")
+            local locationInfo = scanObject(location.obj, location.name, 0)
+            workspaceDump[location.name] = locationInfo
+        end)
+    end
+
+    -- Save to a global variable for analysis
+    _G.WorkspaceDump = workspaceDump
+
+    print("✅ Workspace scan complete!")
+    print("📊 Total objects scanned: " .. scanCount)
+    print("💾 Dump saved to _G.WorkspaceDump")
+
+    -- Try to save to a file (if possible)
+    pcall(function()
+        local dumpString = "WORKSPACE DUMP - " .. os.date() .. "\n\n"
+        dumpString = dumpString .. "Total objects scanned: " .. scanCount .. "\n\n"
+
+        local function formatDump(objInfo, indent)
+            local result = string.rep("  ", indent) .. objInfo.ClassName .. ": " .. objInfo.Name
+            if objInfo.RemoteType then
+                result = result .. " [" .. objInfo.RemoteType .. "]"
+            end
+            result = result .. " (" .. objInfo.Path .. ")\n"
+
+            for _, child in pairs(objInfo.Children) do
+                result = result .. formatDump(child, indent + 1)
+            end
+
+            return result
+        end
+
+        for locationName, locationInfo in pairs(workspaceDump) do
+            dumpString = dumpString .. "=== " .. locationName .. " ===\n"
+            dumpString = dumpString .. formatDump(locationInfo, 0) .. "\n"
+        end
+
+        -- Try to write to console (as a backup)
+        print("📄 WORKSPACE DUMP:")
+        print(dumpString)
+
+        -- Try to save to a file if possible
+        if writefile then
+            writefile("workspace_dump_" .. os.time() .. ".txt", dumpString)
+            print("💾 Saved workspace dump to file!")
+        else
+            print("⚠️ Could not save to file (writefile not available)")
+        end
+    end)
+
+    return workspaceDump
+end
+
+-- Analyze workspace dump for duplication methods
+function analyzeWorkspaceForDuplication()
+    print("🔬 Analyzing workspace dump for duplication methods...")
+
+    if not _G.WorkspaceDump then
+        print("❌ No workspace dump found. Run scanWorkspace() first.")
+        return
+    end
+
+    local potentialMethods = {
+        inventoryRemotes = {},
+        itemRemotes = {},
+        rewardRemotes = {},
+        shopRemotes = {},
+        adminRemotes = {},
+        suspiciousScripts = {}
+    }
+
+    local function analyzeObject(objInfo)
+        local name = objInfo.Name:lower()
+        local className = objInfo.ClassName
+        local path = objInfo.Path
+
+        -- Find remotes related to inventory/item management
+        if className == "RemoteEvent" or className == "RemoteFunction" then
+            if string.find(name, "inventory") or string.find(name, "backpack") or string.find(name, "tool") then
+                table.insert(potentialMethods.inventoryRemotes, {
+                    name = objInfo.Name,
+                    type = className,
+                    path = path
+                })
+            elseif string.find(name, "item") or string.find(name, "add") or string.find(name, "give") or string.find(name, "remove") then
+                table.insert(potentialMethods.itemRemotes, {
+                    name = objInfo.Name,
+                    type = className,
+                    path = path
+                })
+            elseif string.find(name, "reward") or string.find(name, "gift") or string.find(name, "claim") or string.find(name, "redeem") then
+                table.insert(potentialMethods.rewardRemotes, {
+                    name = objInfo.Name,
+                    type = className,
+                    path = path
+                })
+            elseif string.find(name, "shop") or string.find(name, "buy") or string.find(name, "purchase") or string.find(name, "sell") then
+                table.insert(potentialMethods.shopRemotes, {
+                    name = objInfo.Name,
+                    type = className,
+                    path = path
+                })
+            elseif string.find(name, "admin") or string.find(name, "mod") or string.find(name, "dev") or string.find(name, "debug") then
+                table.insert(potentialMethods.adminRemotes, {
+                    name = objInfo.Name,
+                    type = className,
+                    path = path
+                })
+            end
+        end
+
+        -- Find suspicious scripts that might handle duplication
+        if className == "Script" or className == "LocalScript" or className == "ModuleScript" then
+            if string.find(name, "dupe") or string.find(name, "duplicate") or string.find(name, "item") or
+               string.find(name, "inventory") or string.find(name, "backpack") or string.find(name, "tool") then
+                table.insert(potentialMethods.suspiciousScripts, {
+                    name = objInfo.Name,
+                    type = className,
+                    path = path,
+                    disabled = objInfo.Disabled
+                })
+            end
+        end
+
+        -- Recursively analyze children
+        for _, child in pairs(objInfo.Children) do
+            analyzeObject(child)
+        end
+    end
+
+    -- Analyze all locations
+    for locationName, locationInfo in pairs(_G.WorkspaceDump) do
+        analyzeObject(locationInfo)
+    end
+
+    -- Print analysis results
+    print("📊 WORKSPACE ANALYSIS RESULTS:")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+    print("🎒 INVENTORY REMOTES:")
+    for _, remote in pairs(potentialMethods.inventoryRemotes) do
+        print("   • " .. remote.name .. " (" .. remote.type .. ") - " .. remote.path)
+    end
+
+    print("\n📦 ITEM REMOTES:")
+    for _, remote in pairs(potentialMethods.itemRemotes) do
+        print("   • " .. remote.name .. " (" .. remote.type .. ") - " .. remote.path)
+    end
+
+    print("\n🎁 REWARD REMOTES:")
+    for _, remote in pairs(potentialMethods.rewardRemotes) do
+        print("   • " .. remote.name .. " (" .. remote.type .. ") - " .. remote.path)
+    end
+
+    print("\n🛒 SHOP REMOTES:")
+    for _, remote in pairs(potentialMethods.shopRemotes) do
+        print("   • " .. remote.name .. " (" .. remote.type .. ") - " .. remote.path)
+    end
+
+    print("\n👑 ADMIN REMOTES:")
+    for _, remote in pairs(potentialMethods.adminRemotes) do
+        print("   • " .. remote.name .. " (" .. remote.type .. ") - " .. remote.path)
+    end
+
+    print("\n🔍 SUSPICIOUS SCRIPTS:")
+    for _, script in pairs(potentialMethods.suspiciousScripts) do
+        local status = script.disabled and "DISABLED" or "ENABLED"
+        print("   • " .. script.name .. " (" .. script.type .. " - " .. status .. ") - " .. script.path)
+    end
+
+    print("\n💡 RECOMMENDATIONS:")
+    if #potentialMethods.inventoryRemotes > 0 then
+        print("   • Try INVENTORY remotes first - they might handle direct item manipulation")
+    end
+    if #potentialMethods.itemRemotes > 0 then
+        print("   • ITEM remotes could be for adding/removing specific items")
+    end
+    if #potentialMethods.rewardRemotes > 0 then
+        print("   • REWARD remotes are safest but give random items")
+    end
+    if #potentialMethods.adminRemotes > 0 then
+        print("   • ADMIN remotes might have full control but could be risky")
+    end
+
+    -- Save analysis to global for later use
+    _G.DuplicationAnalysis = potentialMethods
+
+    print("\n💾 Analysis saved to _G.DuplicationAnalysis")
+    print("🔍 Use this data to find the proper duplication method!")
+
+    return potentialMethods
+end
+
 -- Main loop
 print("🔍 Starting remote and function scanning...")
 scanRemotes()
 scanFunctions()
 scanForItemMethods() -- Advanced item method scanning
+
+-- Comprehensive workspace scan
+print("🏗️ Starting workspace analysis...")
+local workspaceData = scanWorkspace()
+
+-- Analyze workspace for duplication methods
+print("🔬 Analyzing workspace for duplication methods...")
+local analysisResults = analyzeWorkspaceForDuplication()
 
 -- Wait a moment for scanning to complete
 print("⏳ Waiting for scans to complete...")
@@ -1900,6 +2212,8 @@ task.wait(1)
 print("📊 Scan results:")
 print("   - Remotes found: " .. #remotes)
 print("   - Functions found: " .. #funcs)
+print("   - Workspace objects scanned: Available in _G.WorkspaceDump")
+print("   - Duplication analysis: Available in _G.DuplicationAnalysis")
 
 createUI()
 
