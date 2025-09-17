@@ -1230,7 +1230,7 @@ function createUI()
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, 0, 0, 20)
     title.Position = UDim2.new(0, 0, 0, 0)
-    title.Text = "Islands Item Duplicator"
+    title.Text = "Islands Item Duplicator v2.1 (Fixed)"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.BackgroundTransparency = 1
     title.Parent = frame
@@ -1603,50 +1603,50 @@ function addItem()
             end
         end
 
+        -- Skip problematic remotes entirely
         if shouldAvoid then
-            -- Skip problematic remotes
-            continue
-        end
-
-        -- Check if this remote matches safe patterns
-        local isSafe = false
-        for _, pattern in ipairs(safePatterns) do
-            if string.find(name, pattern) or string.find(path, pattern) then
-                isSafe = true
-                break
-            end
-        end
-
-        if isSafe then
-            calledCount = calledCount + 1
-
-            -- Try different parameter combinations
-            local attempts = {
-                {itemId, amount},
-                {{itemId = itemId, amount = amount}},
-                {"AddItem", itemId, amount},
-                {"GiveItem", itemId, amount},
-                {LocalPlayer, itemId, amount}
-            }
-
-            local remoteSuccess = false
-            for _, params in ipairs(attempts) do
-                local success, errorMsg = safeCall(remote, unpack(params))
-                if success then
-                    remoteSuccess = true
-                    successCount = successCount + 1
-                    print("✅ SUCCESS: " .. remote.Name .. " (" .. table.concat(params, ", ") .. ")")
-                    break
-                elseif errorMsg == "capability_error" then
-                    errorCount = errorCount + 1
-                    -- Don't print capability errors to reduce spam
+            -- Don't process this remote at all
+        else
+            -- Check if this remote matches safe patterns
+            local isSafe = false
+            for _, pattern in ipairs(safePatterns) do
+                if string.find(name, pattern) or string.find(path, pattern) then
+                    isSafe = true
                     break
                 end
             end
 
-            if not remoteSuccess and errorCount == 0 then
-                -- Only print if not a capability error
-                print("⚠️ " .. remote.Name .. " - no successful calls")
+            if isSafe then
+                calledCount = calledCount + 1
+
+                -- Try different parameter combinations
+                local attempts = {
+                    {itemId, amount},
+                    {{itemId = itemId, amount = amount}},
+                    {"AddItem", itemId, amount},
+                    {"GiveItem", itemId, amount},
+                    {LocalPlayer, itemId, amount}
+                }
+
+                local remoteSuccess = false
+                for _, params in ipairs(attempts) do
+                    local success, errorMsg = safeCall(remote, unpack(params))
+                    if success then
+                        remoteSuccess = true
+                        successCount = successCount + 1
+                        print("✅ SUCCESS: " .. remote.Name .. " (" .. table.concat(params, ", ") .. ")")
+                        break
+                    elseif errorMsg == "capability_error" then
+                        errorCount = errorCount + 1
+                        -- Don't print capability errors to reduce spam
+                        break
+                    end
+                end
+
+                if not remoteSuccess and errorCount == 0 then
+                    -- Only print if not a capability error
+                    print("⚠️ " .. remote.Name .. " - no successful calls")
+                end
             end
         end
     end
