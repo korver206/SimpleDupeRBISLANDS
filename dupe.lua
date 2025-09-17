@@ -1089,7 +1089,7 @@ function createUI()
 
     frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 800, 0, 700)
-    frame.Position = UDim2.new(0.5, -400, 0.5, -250)
+    frame.Position = UDim2.new(0.5, -400, 0.5, -350)
     frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     frame.BackgroundTransparency = 0.5
     frame.Parent = screenGui
