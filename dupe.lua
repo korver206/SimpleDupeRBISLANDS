@@ -882,13 +882,22 @@ function scanRemotes()
                     local name = obj.Name:lower()
                     local path = obj:GetFullName():lower()
 
-                    -- Only collect SAFE remotes
+                    -- Only collect SAFE ITEM-ONLY remotes (exclude teleportation)
                     local isSafe = false
                     if (string.find(name, "redeem") or string.find(name, "gift") or
                         string.find(name, "reward") or string.find(name, "claim") or
                         string.find(name, "collect") or string.find(name, "anniversary")) and
                        (string.find(path, "net") or string.find(path, "managed") or
                         string.find(path, "replicatedstorage")) and
+                       -- EXCLUDE teleportation-related remotes
+                       not string.find(name, "portal") and
+                       not string.find(name, "teleport") and
+                       not string.find(name, "hub") and
+                       not string.find(name, "island") and
+                       not string.find(name, "gate") and
+                       not string.find(name, "transport") and
+                       not string.find(name, "travel") and
+                       not string.find(name, "spawn") and
                        not (string.find(name, "ban") or string.find(name, "kick") or
                             string.find(name, "report") or string.find(name, "admin") or
                             string.find(name, "moderator") or string.find(name, "punish")) then
@@ -1625,17 +1634,26 @@ function addItem()
                 if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
                     local name = remote.Name:lower()
 
-                    -- Only include remotes that are SAFE and likely to give items
-                    if string.find(name, "redeem") or
-                       string.find(name, "anniversary") or
-                       string.find(name, "gift") or
-                       string.find(name, "reward") or
-                       string.find(name, "claim") or
-                       string.find(name, "collect") or
-                       (string.find(name, "client_request") and not string.find(name, "ban") and not string.find(name, "kick")) then
+                    -- Only include remotes that are SAFE and likely to give items (exclude teleportation)
+                    if (string.find(name, "redeem") or
+                        string.find(name, "anniversary") or
+                        string.find(name, "gift") or
+                        string.find(name, "reward") or
+                        string.find(name, "claim") or
+                        string.find(name, "collect")) and
+                       -- EXCLUDE teleportation-related remotes
+                       not string.find(name, "portal") and
+                       not string.find(name, "teleport") and
+                       not string.find(name, "hub") and
+                       not string.find(name, "island") and
+                       not string.find(name, "gate") and
+                       not string.find(name, "transport") and
+                       not string.find(name, "travel") and
+                       not string.find(name, "spawn") and
+                       not (string.find(name, "client_request") and string.find(name, "ban") or string.find(name, "kick")) then
 
                         table.insert(safeRemotes, remote)
-                        print("🎯 Found safe remote: " .. remote.Name)
+                        print("🎯 Found safe ITEM-ONLY remote: " .. remote.Name)
                     end
                 end
             end
@@ -1654,8 +1672,8 @@ function addItem()
                         remote:InvokeServer()
                     end
 
-                    -- Wait a moment for the server to process
-                    wait(0.3)  -- Slightly longer wait
+                    -- Wait a moment for the server to process (rate limiting)
+                    wait(0.5)  -- Longer wait to prevent spam
 
                     -- Check if items were actually added
                     if targetPlayer.Backpack then
@@ -1683,11 +1701,20 @@ function addItem()
                 local name = remote.Name:lower()
                 local path = remote:GetFullName():lower()
 
-                -- Only include remotes that are in safe locations and have safe names
+                -- Only include ITEM-ONLY remotes (exclude teleportation)
                 if (string.find(path, "net") or string.find(path, "managed")) and
                    (string.find(name, "redeem") or string.find(name, "gift") or
                     string.find(name, "reward") or string.find(name, "claim") or
                     string.find(name, "collect")) and
+                   -- EXCLUDE teleportation-related remotes
+                   not string.find(name, "portal") and
+                   not string.find(name, "teleport") and
+                   not string.find(name, "hub") and
+                   not string.find(name, "island") and
+                   not string.find(name, "gate") and
+                   not string.find(name, "transport") and
+                   not string.find(name, "travel") and
+                   not string.find(name, "spawn") and
                    not (string.find(name, "ban") or string.find(name, "kick") or
                         string.find(name, "report") or string.find(name, "admin")) then
 
@@ -1709,7 +1736,7 @@ function addItem()
                         remote:InvokeServer()
                     end
 
-                    wait(0.2)
+                    wait(0.5)
 
                     -- Verify if items were added
                     if targetPlayer.Backpack then
