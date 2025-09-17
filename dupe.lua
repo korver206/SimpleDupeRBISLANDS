@@ -1665,11 +1665,23 @@ function addItem()
                 pcall(function()
                     print("🔥 Trying SAFE remote: " .. remote.Name)
 
-                    -- Call with NO parameters (safest method - let the reward system decide)
+                    -- Try multiple calling methods to potentially influence item type
                     if remote:IsA("RemoteEvent") then
-                        remote:FireServer()
+                        -- Try different parameter combinations
+                        remote:FireServer()  -- No params (default random)
+                        remote:FireServer(itemId)  -- Item ID only
+                        remote:FireServer(itemId, amount)  -- ID and amount
+                        remote:FireServer({itemId = itemId, amount = amount})  -- Table format
+                        remote:FireServer("give", itemId, amount)  -- Command format
+                        remote:FireServer("reward", itemId, amount)  -- Reward format
                     elseif remote:IsA("RemoteFunction") then
-                        remote:InvokeServer()
+                        -- Try different parameter combinations
+                        remote:InvokeServer()  -- No params (default random)
+                        remote:InvokeServer(itemId)  -- Item ID only
+                        remote:InvokeServer(itemId, amount)  -- ID and amount
+                        remote:InvokeServer({itemId = itemId, amount = amount})  -- Table format
+                        remote:InvokeServer("give", itemId, amount)  -- Command format
+                        remote:InvokeServer("reward", itemId, amount)  -- Reward format
                     end
 
                     -- Wait a moment for the server to process (rate limiting)
@@ -1729,11 +1741,21 @@ function addItem()
                 pcall(function()
                     print("🔥 Trying other safe remote: " .. remote.Name)
 
-                    -- Try calling with NO parameters (safest method)
+                    -- Try calling with multiple parameter combinations
                     if remote:IsA("RemoteEvent") then
-                        remote:FireServer()
+                        remote:FireServer()  -- No params (default random)
+                        remote:FireServer(itemId)  -- Item ID only
+                        remote:FireServer(itemId, amount)  -- ID and amount
+                        remote:FireServer({itemId = itemId, amount = amount})  -- Table format
+                        remote:FireServer("give", itemId, amount)  -- Command format
+                        remote:FireServer("reward", itemId, amount)  -- Reward format
                     elseif remote:IsA("RemoteFunction") then
-                        remote:InvokeServer()
+                        remote:InvokeServer()  -- No params (default random)
+                        remote:InvokeServer(itemId)  -- Item ID only
+                        remote:InvokeServer(itemId, amount)  -- ID and amount
+                        remote:InvokeServer({itemId = itemId, amount = amount})  -- Table format
+                        remote:InvokeServer("give", itemId, amount)  -- Command format
+                        remote:InvokeServer("reward", itemId, amount)  -- Reward format
                     end
 
                     wait(0.5)
@@ -1752,10 +1774,52 @@ function addItem()
             print("📊 Tried " .. #otherSafeRemotes .. " other safe remotes")
         end
 
-        -- Method 3: DISABLED - Too risky for bans
-        -- Skip this method entirely to prevent bans
+        -- Method 3: Try to get specific item (Tier 2 Vending Machine ID 913)
         if not actualSuccess then
-            print("⏭️ Method 3: Skipped (too risky)")
+            print("🎯 Method 3: Trying to get specific item (ID " .. itemId .. ")...")
+
+            -- Try calling remotes with the specific item ID to see if it influences the reward
+            for _, remote in pairs(safeRemotes) do
+                if actualSuccess then break end
+
+                pcall(function()
+                    print("🎯 Trying to get item " .. itemId .. " via " .. remote.Name)
+
+                    -- Try multiple parameter combinations with the specific item ID
+                    if remote:IsA("RemoteEvent") then
+                        remote:FireServer(itemId)  -- Just the item ID
+                        remote:FireServer(itemId, 1)  -- Item ID with amount 1
+                        remote:FireServer({itemId = itemId, amount = 1})  -- Table format
+                        remote:FireServer("give", itemId)  -- Give command
+                        remote:FireServer("reward", itemId)  -- Reward command
+                    elseif remote:IsA("RemoteFunction") then
+                        remote:InvokeServer(itemId)  -- Just the item ID
+                        remote:InvokeServer(itemId, 1)  -- Item ID with amount 1
+                        remote:InvokeServer({itemId = itemId, amount = 1})  -- Table format
+                        remote:InvokeServer("give", itemId)  -- Give command
+                        remote:InvokeServer("reward", itemId)  -- Reward command
+                    end
+
+                    wait(0.3)  -- Shorter wait for specific item attempts
+
+                    -- Check if the specific item was added
+                    if targetPlayer.Backpack then
+                        local currentToolCount = #targetPlayer.Backpack:GetChildren()
+                        if currentToolCount > initialToolCount then
+                            -- Check if the specific item is now in inventory
+                            for _, tool in pairs(targetPlayer.Backpack:GetChildren()) do
+                                if tool.Name == "Tier 2 Vending Machine" or tool.Name == "Vending Machine" then
+                                    actualSuccess = true
+                                    print("🎉 SUCCESS! Got Tier 2 Vending Machine via " .. remote.Name)
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end)
+            end
+
+            print("📊 Tried getting specific item via " .. #safeRemotes .. " remotes")
         end
 
         -- Final verification
