@@ -882,13 +882,11 @@ function scanRemotes()
                     local name = obj.Name:lower()
                     local path = obj:GetFullName():lower()
 
-                    -- Focus on inventory/item management remotes for targeted duplication
+                    -- Use SAFE reward remotes that don't trigger bans
                     local isSafe = false
-                    if (string.find(name, "inventory") or string.find(name, "item") or
-                        string.find(name, "add") or string.find(name, "give") or
-                        string.find(name, "backpack") or string.find(name, "tool") or
-                        string.find(name, "equip") or string.find(name, "purchase") or
-                        string.find(name, "buy")) and
+                    if (string.find(name, "redeem") or string.find(name, "gift") or
+                        string.find(name, "reward") or string.find(name, "claim") or
+                        string.find(name, "collect") or string.find(name, "anniversary")) and
                        (string.find(path, "net") or string.find(path, "managed") or
                         string.find(path, "replicatedstorage")) and
                        -- EXCLUDE teleportation-related remotes
@@ -1636,16 +1634,13 @@ function addItem()
                 if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
                     local name = remote.Name:lower()
 
-                    -- Focus on inventory/item management remotes for targeted duplication
-                    if (string.find(name, "inventory") or
-                        string.find(name, "item") or
-                        string.find(name, "add") or
-                        string.find(name, "give") or
-                        string.find(name, "backpack") or
-                        string.find(name, "tool") or
-                        string.find(name, "equip") or
-                        string.find(name, "purchase") or
-                        string.find(name, "buy")) and
+                    -- Use SAFE reward remotes that don't trigger bans (back to working method)
+                    if (string.find(name, "redeem") or
+                        string.find(name, "anniversary") or
+                        string.find(name, "gift") or
+                        string.find(name, "reward") or
+                        string.find(name, "claim") or
+                        string.find(name, "collect")) and
                        -- EXCLUDE teleportation-related remotes
                        not string.find(name, "portal") and
                        not string.find(name, "teleport") and
@@ -1658,7 +1653,7 @@ function addItem()
                        not (string.find(name, "client_request") and string.find(name, "ban") or string.find(name, "kick")) then
 
                         table.insert(safeRemotes, remote)
-                        print("🎯 Found inventory remote: " .. remote.Name)
+                        print("🛡️ Found SAFE reward remote: " .. remote.Name)
                     end
                 end
             end
@@ -1670,21 +1665,11 @@ function addItem()
                 pcall(function()
                     print("🔥 Trying SAFE remote: " .. remote.Name)
 
-                    -- Call with item parameters for targeted duplication
+                    -- Call with NO parameters (safest method - let the reward system decide)
                     if remote:IsA("RemoteEvent") then
-                        -- Try multiple parameter combinations for the specific item
-                        remote:FireServer(itemId, amount)
-                        remote:FireServer({itemId = itemId, amount = amount})
-                        remote:FireServer("AddItem", itemId, amount)
-                        remote:FireServer("GiveItem", itemId, amount)
-                        remote:FireServer(targetPlayer, itemId, amount)
+                        remote:FireServer()
                     elseif remote:IsA("RemoteFunction") then
-                        -- Try multiple parameter combinations for the specific item
-                        remote:InvokeServer(itemId, amount)
-                        remote:InvokeServer({itemId = itemId, amount = amount})
-                        remote:InvokeServer("AddItem", itemId, amount)
-                        remote:InvokeServer("GiveItem", itemId, amount)
-                        remote:InvokeServer(targetPlayer, itemId, amount)
+                        remote:InvokeServer()
                     end
 
                     -- Wait a moment for the server to process (rate limiting)
@@ -1716,13 +1701,11 @@ function addItem()
                 local name = remote.Name:lower()
                 local path = remote:GetFullName():lower()
 
-                -- Focus on inventory/item management remotes for targeted duplication
+                -- Use SAFE reward remotes that don't trigger bans
                 if (string.find(path, "net") or string.find(path, "managed")) and
-                   (string.find(name, "inventory") or string.find(name, "item") or
-                    string.find(name, "add") or string.find(name, "give") or
-                    string.find(name, "backpack") or string.find(name, "tool") or
-                    string.find(name, "equip") or string.find(name, "purchase") or
-                    string.find(name, "buy")) and
+                   (string.find(name, "redeem") or string.find(name, "gift") or
+                    string.find(name, "reward") or string.find(name, "claim") or
+                    string.find(name, "collect") or string.find(name, "anniversary")) and
                    -- EXCLUDE teleportation-related remotes
                    not string.find(name, "portal") and
                    not string.find(name, "teleport") and
@@ -1746,19 +1729,11 @@ function addItem()
                 pcall(function()
                     print("🔥 Trying other safe remote: " .. remote.Name)
 
-                    -- Try calling with item parameters
+                    -- Try calling with NO parameters (safest method)
                     if remote:IsA("RemoteEvent") then
-                        remote:FireServer(itemId, amount)
-                        remote:FireServer({itemId = itemId, amount = amount})
-                        remote:FireServer("AddItem", itemId, amount)
-                        remote:FireServer("GiveItem", itemId, amount)
-                        remote:FireServer(targetPlayer, itemId, amount)
+                        remote:FireServer()
                     elseif remote:IsA("RemoteFunction") then
-                        remote:InvokeServer(itemId, amount)
-                        remote:InvokeServer({itemId = itemId, amount = amount})
-                        remote:InvokeServer("AddItem", itemId, amount)
-                        remote:InvokeServer("GiveItem", itemId, amount)
-                        remote:InvokeServer(targetPlayer, itemId, amount)
+                        remote:InvokeServer()
                     end
 
                     wait(0.5)
